@@ -76,6 +76,7 @@
         <div class="navbar-right">
             <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
             <a href="/">Inicio</a>
+            <a href="/reportes">Reportes</a>
             {% if session.rol == 'admin' %}
             <a href="/usuarios">Usuarios</a>
             {% endif %}

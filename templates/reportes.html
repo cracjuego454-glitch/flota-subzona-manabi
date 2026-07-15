@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes por Mecanica - FLOTA VEHICULAR</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+
+        .navbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; }
+        .navbar h1 { color: #3b82f6; font-size: 1.5rem; }
+        .navbar-right { display: flex; align-items: center; gap: 1rem; }
+        .navbar a { color: #94a3b8; text-decoration: none; }
+        .navbar a:hover { color: #3b82f6; }
+        .navbar .user-info { color: #64748b; font-size: 0.85rem; }
+        .navbar .user-info strong { color: #e2e8f0; }
+
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+        .stat-card .number { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { color: #94a3b8; font-size: 0.9rem; }
+        .stat-card.total .number { color: #3b82f6; }
+        .stat-card.correctivos .number { color: #ef4444; }
+        .stat-card.preventivos .number { color: #22c55e; }
+        .stat-card.otros .number { color: #f59e0b; }
+        .stat-card.costo .number { color: #c084fc; font-size: 1.4rem; }
+
+        .filters { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; margin-bottom: 2rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+        .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .filter-group label { color: #94a3b8; font-size: 0.85rem; }
+        .filter-group select, .filter-group input { padding: 0.6rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 0.95rem; }
+        .filter-group select:focus, .filter-group input:focus { outline: none; border-color: #3b82f6; }
+
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+        th { background: #334155; padding: 1rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; }
+        tr { background: #1e293b; transition: background 0.2s; }
+        tr:hover { background: #334155; }
+
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .badge-correctivo { background: #7f1d1d; color: #ef4444; }
+        .badge-preventivo { background: #166534; color: #22c55e; }
+        .badge-otro { background: #78350f; color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
+        <div class="navbar-right">
+            <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
+            <a href="/">Inicio</a>
+            <a href="/reportes">Reportes</a>
+            {% if session.rol == 'admin' %}
+            <a href="/usuarios">Usuarios</a>
+            {% endif %}
+            <a href="/logout">Cerrar Sesion</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card total"><div class="number">{{ total }}</div><div class="label">Total Mantenimientos</div></div>
+            <div class="stat-card correctivos"><div class="number">{{ correctivos }}</div><div class="label">Correctivos</div></div>
+            <div class="stat-card preventivos"><div class="number">{{ preventivos }}</div><div class="label">Preventivos</div></div>
+            <div class="stat-card otros"><div class="number">{{ otro }}</div><div class="label">Otros Tipos</div></div>
+            <div class="stat-card costo"><div class="number">${{ "{:,.2f}".format(costo_total) }}</div><div class="label">Costo Total</div></div>
+        </div>
+
+        <form class="filters" action="/reportes" method="GET">
+            <div class="filter-group">
+                <label>Mecanica</label>
+                <select name="mecanica">
+                    <option value="">Todas</option>
+                    {% for m in mecanicas %}
+                    <option value="{{ m.mecanica }}" {% if mecanica_actual == m.mecanica %}selected{% endif %}>{{ m.mecanica }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Tipo</label>
+                <select name="tipo">
+                    <option value="">Todos</option>
+                    {% for t in tipos %}
+                    <option value="{{ t.tipo }}" {% if tipo_actual == t.tipo %}selected{% endif %}>{{ t.tipo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Desde</label>
+                <input type="date" name="fecha_desde" value="{{ fecha_desde }}">
+            </div>
+            <div class="filter-group">
+                <label>Hasta</label>
+                <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if mecanica_actual or tipo_actual or fecha_desde or fecha_hasta %}
+            <a href="/reportes" class="btn btn-danger">Limpiar</a>
+            {% endif %}
+            <a href="/exportar-excel" class="btn btn-success">Exportar Excel</a>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Mecanica</th>
+                    <th>Marca/Modelo</th>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Descripcion</th>
+                    <th>Kilometraje</th>
+                    <th>Costo</th>
+                    <th>Taller</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in mantenimientos %}
+                <tr>
+                    <td><strong>{{ m.placa }}</strong></td>
+                    <td>{{ m.mecanica or '-' }}</td>
+                    <td>{{ m.marca or '' }} {{ m.modelo or '' }}</td>
+                    <td>{{ m.fecha }}</td>
+                    <td>
+                        {% if m.tipo == 'Correctivo' %}
+                            <span class="badge badge-correctivo">Correctivo</span>
+                        {% elif m.tipo == 'Preventivo' %}
+                            <span class="badge badge-preventivo">Preventivo</span>
+                        {% else %}
+                            <span class="badge badge-otro">{{ m.tipo or '-' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ m.descripcion or '-' }}</td>
+                    <td>{{ "{:,}".format(m.kilometraje or 0) }} km</td>
+                    <td>${{ "{:,.2f}".format(m.costo or 0) }}</td>
+                    <td>{{ m.taller or '-' }}</td>
+                </tr>
+                {% endfor %}
+                {% if not mantenimientos %}
+                <tr><td colspan="9" style="text-align:center; padding:2rem; color:#64748b;">No hay mantenimientos registrados con estos filtros</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <footer style="text-align:center; padding:2rem; color:#475569; font-size:0.85rem; border-top:1px solid #1e293b; margin-top:3rem;">
+        <div style="padding-left:2rem;">Creado por Poli. Loor Cevallos Willian Albiery</div>
+        <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
+    </footer>
+</body>
+</html>

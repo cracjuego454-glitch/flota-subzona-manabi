@@ -227,25 +227,29 @@ def index():
 def agregar():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (
-        request.form["placa"].upper(),
-        request.form["chasis"],
-        request.form["motor"],
-        request.form["marca"],
-        request.form["modelo"],
-        request.form["anio"],
-        request.form["kilometraje"],
-        request.form["ubicacion"],
-        request.form["estado"],
-        session.get("usuario", ""),
-        request.form.get("mecanica", "Multimarcas")
-    ))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        cur.execute("""
+            INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            request.form["placa"].upper(),
+            request.form["chasis"],
+            request.form["motor"],
+            request.form["marca"],
+            request.form["modelo"],
+            request.form["anio"],
+            request.form["kilometraje"],
+            request.form["ubicacion"],
+            request.form["estado"],
+            session.get("usuario", ""),
+            request.form.get("mecanica", "Multimarcas")
+        ))
+        conn.commit()
+    except psycopg2.IntegrityError:
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
     return redirect(url_for("index"))
 
 
@@ -737,6 +741,72 @@ def importar_excel(filepath):
     cur.close()
     conn.close()
     return imported, updated
+
+
+@app.route("/reportes")
+@login_required
+def reportes():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    mecanica_filter = request.args.get("mecanica", "")
+    tipo_filter = request.args.get("tipo", "")
+    fecha_desde = request.args.get("fecha_desde", "")
+    fecha_hasta = request.args.get("fecha_hasta", "")
+
+    cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
+    mecanicas = cur.fetchall()
+
+    query = """
+        SELECT m.*, v.placa, v.mecanica, v.marca, v.modelo
+        FROM mantenimientos m
+        LEFT JOIN vehiculos v ON m.vehiculo_id = v.id
+        WHERE 1=1
+    """
+    params = []
+
+    if mecanica_filter:
+        query += " AND v.mecanica = %s"
+        params.append(mecanica_filter)
+    if tipo_filter:
+        query += " AND m.tipo = %s"
+        params.append(tipo_filter)
+    if fecha_desde:
+        query += " AND m.fecha >= %s"
+        params.append(fecha_desde)
+    if fecha_hasta:
+        query += " AND m.fecha <= %s"
+        params.append(fecha_hasta)
+
+    query += " ORDER BY m.fecha DESC"
+    cur.execute(query, params)
+    mantenimientos = cur.fetchall()
+
+    cur.execute("SELECT DISTINCT tipo FROM mantenimientos WHERE tipo IS NOT NULL AND tipo != '' ORDER BY tipo")
+    tipos = cur.fetchall()
+
+    total = len(mantenimientos)
+    correctivos = sum(1 for m in mantenimientos if m.get("tipo") == "Correctivo")
+    preventivos = sum(1 for m in mantenimientos if m.get("tipo") == "Preventivo")
+    otro = total - correctivos - preventivos
+    costo_total = sum(m.get("costo") or 0 for m in mantenimientos)
+
+    cur.close()
+    conn.close()
+    return render_template("reportes.html",
+        mantenimientos=mantenimientos,
+        mecanicas=mecanicas,
+        tipos=tipos,
+        total=total,
+        correctivos=correctivos,
+        preventivos=preventivos,
+        otro=otro,
+        costo_total=costo_total,
+        mecanica_actual=mecanica_filter,
+        tipo_actual=tipo_filter,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta
+    )
 
 
 init_db()
