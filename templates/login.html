@@ -81,6 +81,14 @@
             position: relative;
             z-index: 1;
         }
+        .shield {
+            display: block;
+            margin: 0 auto 1rem;
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(59,130,246,0.3));
+        }
         .login-box h1 { color: #3b82f6; text-align: center; margin-bottom: 0.5rem; font-size: 1.8rem; }
         .login-box .subtitle { color: #64748b; text-align: center; margin-bottom: 2rem; font-size: 0.9rem; }
         .form-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.2rem; }
@@ -126,6 +134,7 @@
         <span>&#128736;</span>
     </div>
     <div class="login-box">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Escudo_Policia_Nacional_Ecuador.jpg/200px-Escudo_Policia_Nacional_Ecuador.jpg" alt="Policia Nacional del Ecuador" class="shield">
         <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
         <div class="subtitle">Inicia sesion para continuar</div>
         {% if error %}
