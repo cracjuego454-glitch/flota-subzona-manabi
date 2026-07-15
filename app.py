@@ -45,7 +45,6 @@ def get_db():
     cur = conn.cursor()
     cur.execute("SET timezone = 'America/Guayaquil'")
     cur.close()
-    conn.commit()
     return conn
 
 

@@ -51,6 +51,20 @@
         .badge-correctivo { background: #7f1d1d; color: #ef4444; }
         .badge-preventivo { background: #166534; color: #22c55e; }
         .badge-otro { background: #78350f; color: #f59e0b; }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .number { font-size: 1.5rem; }
+            .filters { flex-direction: column; }
+            .filters .filter-group { width: 100%; }
+            .filters select, .filters input { width: 100%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
     </style>
 </head>
 <body>

@@ -68,6 +68,21 @@
         .badge-remate { background: #581c87; color: #c084fc; }
 
         .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .number { font-size: 1.5rem; }
+            .actions { flex-direction: column; }
+            .search-box { min-width: unset; width: 100%; }
+            .form-grid { grid-template-columns: 1fr; }
+            .modal { padding: 1.5rem; width: 95%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
     </style>
 </head>
 <body>

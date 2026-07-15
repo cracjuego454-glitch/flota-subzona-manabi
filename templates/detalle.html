@@ -55,6 +55,18 @@
         tr { background: #1e293b; transition: background 0.2s; }
         tr:hover { background: #334155; }
         .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .vehicle-grid { grid-template-columns: 1fr; }
+            .vehicle-header h2 { font-size: 1.3rem; }
+            .form-grid { grid-template-columns: 1fr; }
+            .modal { padding: 1.5rem; width: 95%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
     </style>
 </head>
 <body>
