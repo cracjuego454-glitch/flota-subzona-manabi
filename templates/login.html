@@ -30,24 +30,47 @@
                 radial-gradient(circle at 50% 50%, rgba(34,197,94,0.04) 0%, transparent 60%);
             pointer-events: none;
         }
-        body::after {
-            content: '';
-            position: absolute;
-            top: -50%; left: -50%;
-            width: 200%; height: 200%;
-            background:
-                repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.008) 40px, rgba(255,255,255,0.008) 41px),
-                repeating-linear-gradient(-45deg, transparent, transparent 40px, rgba(255,255,255,0.008) 40px, rgba(255,255,255,0.008) 41px);
-            pointer-events: none;
-        }
         @keyframes gradientShift {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
 
+        .icon-bg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+        .icon-bg span {
+            position: absolute;
+            font-size: 2.5rem;
+            opacity: 0.04;
+            animation: floatIcon 20s ease-in-out infinite;
+        }
+        .icon-bg span:nth-child(1) { top: 10%; left: 5%; animation-delay: 0s; font-size: 3rem; }
+        .icon-bg span:nth-child(2) { top: 20%; right: 10%; animation-delay: -3s; font-size: 2rem; }
+        .icon-bg span:nth-child(3) { top: 60%; left: 8%; animation-delay: -6s; font-size: 2.8rem; }
+        .icon-bg span:nth-child(4) { top: 75%; right: 15%; animation-delay: -9s; }
+        .icon-bg span:nth-child(5) { top: 40%; left: 85%; animation-delay: -12s; font-size: 2.2rem; }
+        .icon-bg span:nth-child(6) { top: 85%; left: 40%; animation-delay: -15s; font-size: 3.2rem; }
+        .icon-bg span:nth-child(7) { top: 5%; left: 50%; animation-delay: -2s; font-size: 2rem; }
+        .icon-bg span:nth-child(8) { top: 50%; left: 30%; animation-delay: -7s; font-size: 1.8rem; }
+        .icon-bg span:nth-child(9) { top: 30%; left: 65%; animation-delay: -10s; font-size: 2.5rem; }
+        .icon-bg span:nth-child(10) { top: 90%; left: 70%; animation-delay: -4s; }
+        .icon-bg span:nth-child(11) { top: 15%; left: 75%; animation-delay: -11s; font-size: 1.6rem; }
+        .icon-bg span:nth-child(12) { top: 70%; left: 55%; animation-delay: -8s; font-size: 2.3rem; }
+
+        @keyframes floatIcon {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-15px) rotate(5deg); }
+            50% { transform: translateY(10px) rotate(-3deg); }
+            75% { transform: translateY(-8px) rotate(2deg); }
+        }
+
         .login-box {
-            background: rgba(30, 41, 59, 0.9);
+            background: rgba(30, 41, 59, 0.92);
             backdrop-filter: blur(10px);
             border-radius: 16px;
             padding: 3rem;
@@ -83,10 +106,25 @@
         @media (max-width: 768px) {
             .login-box { padding: 2rem 1.5rem; }
             .login-box h1 { font-size: 1.3rem; }
+            .icon-bg span { font-size: 1.5rem; }
         }
     </style>
 </head>
 <body>
+    <div class="icon-bg">
+        <span>&#128663;</span>
+        <span>&#128295;</span>
+        <span>&#128736;</span>
+        <span>&#9881;</span>
+        <span>&#128666;</span>
+        <span>&#128674;</span>
+        <span>&#128295;</span>
+        <span>&#128736;</span>
+        <span>&#9881;</span>
+        <span>&#128663;</span>
+        <span>&#128666;</span>
+        <span>&#128736;</span>
+    </div>
     <div class="login-box">
         <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
         <div class="subtitle">Inicia sesion para continuar</div>
