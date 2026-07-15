@@ -76,6 +76,31 @@
             <div class="stat-card costo"><div class="number">${{ "{:,.2f}".format(costo_total) }}</div><div class="label">Costo Total</div></div>
         </div>
 
+        <div style="display:flex; gap:2rem; margin-bottom:2rem; flex-wrap:wrap;">
+            {% if por_tipo %}
+            <div style="background:#1e293b; border-radius:12px; padding:1.5rem; border:1px solid #334155; flex:1; min-width:250px;">
+                <h3 style="color:#3b82f6; margin-bottom:1rem; font-size:1rem;">Por Tipo de Mantenimiento</h3>
+                {% for tipo, cant in por_tipo.items()|sort(attribute='1', reverse=true) %}
+                <div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #334155;">
+                    <span>{{ tipo }}</span>
+                    <strong style="color:#3b82f6;">{{ cant }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if por_mecanica %}
+            <div style="background:#1e293b; border-radius:12px; padding:1.5rem; border:1px solid #334155; flex:1; min-width:250px;">
+                <h3 style="color:#22c55e; margin-bottom:1rem; font-size:1rem;">Por Mecanica</h3>
+                {% for mec, cant in por_mecanica.items()|sort(attribute='1', reverse=true) %}
+                <div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #334155;">
+                    <span>{{ mec }}</span>
+                    <strong style="color:#22c55e;">{{ cant }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
         <form class="filters" action="/reportes" method="GET">
             <div class="filter-group">
                 <label>Mecanica</label>

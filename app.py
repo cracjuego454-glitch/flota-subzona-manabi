@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -18,6 +18,12 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.json.ensure_ascii = False
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 EXCEL_FILE = "flota_vehicular.xlsx"
+
+
+ECUADOR_TZ = timezone(timedelta(hours=-5))
+
+def fecha_local():
+    return datetime.now(ECUADOR_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @app.template_filter("tojson_filter")
@@ -36,6 +42,10 @@ def get_db():
         sslmode='require'
     )
     conn.autocommit = False
+    cur = conn.cursor()
+    cur.execute("SET timezone = 'America/Guayaquil'")
+    cur.close()
+    conn.commit()
     return conn
 
 
@@ -229,8 +239,8 @@ def agregar():
     cur = conn.cursor()
     try:
         cur.execute("""
-            INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             request.form["placa"].upper(),
             request.form["chasis"],
@@ -242,7 +252,8 @@ def agregar():
             request.form["ubicacion"],
             request.form["estado"],
             session.get("usuario", ""),
-            request.form.get("mecanica", "Multimarcas")
+            request.form.get("mecanica", "Multimarcas"),
+            fecha_local()
         ))
         conn.commit()
     except psycopg2.IntegrityError:
@@ -791,6 +802,16 @@ def reportes():
     otro = total - correctivos - preventivos
     costo_total = sum(m.get("costo") or 0 for m in mantenimientos)
 
+    por_tipo = {}
+    for m in mantenimientos:
+        t = m.get("tipo") or "Sin tipo"
+        por_tipo[t] = por_tipo.get(t, 0) + 1
+
+    por_mecanica = {}
+    for m in mantenimientos:
+        mc = m.get("mecanica") or "Sin mecanica"
+        por_mecanica[mc] = por_mecanica.get(mc, 0) + 1
+
     cur.close()
     conn.close()
     return render_template("reportes.html",
@@ -802,6 +823,8 @@ def reportes():
         preventivos=preventivos,
         otro=otro,
         costo_total=costo_total,
+        por_tipo=por_tipo,
+        por_mecanica=por_mecanica,
         mecanica_actual=mecanica_filter,
         tipo_actual=tipo_filter,
         fecha_desde=fecha_desde,
