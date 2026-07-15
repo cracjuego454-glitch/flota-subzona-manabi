@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLOTA VEHICULAR SUBZONA MANABI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+
+        .navbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; }
+        .navbar h1 { color: #3b82f6; font-size: 1.5rem; }
+        .navbar-right { display: flex; align-items: center; gap: 1rem; }
+        .navbar a { color: #94a3b8; text-decoration: none; }
+        .navbar a:hover { color: #3b82f6; }
+        .navbar .user-info { color: #64748b; font-size: 0.85rem; }
+        .navbar .user-info strong { color: #e2e8f0; }
+
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+        .stat-card .number { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { color: #94a3b8; font-size: 0.9rem; }
+        .stat-card.total .number { color: #3b82f6; }
+        .stat-card.activos .number { color: #22c55e; }
+        .stat-card.taller .number { color: #f59e0b; }
+        .stat-card.inactivos .number { color: #ef4444; }
+        .stat-card.remate .number { color: #c084fc; }
+        .stat-card.km .number { color: #a78bfa; font-size: 1.4rem; }
+
+        .actions { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; align-items: center; }
+        .search-box { flex: 1; min-width: 250px; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 1rem; }
+        .search-box:focus { outline: none; border-color: #3b82f6; }
+
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+        .modal h2 { margin-bottom: 1.5rem; color: #3b82f6; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-group label { color: #94a3b8; font-size: 0.85rem; }
+        .form-group input, .form-group select, .form-group textarea { padding: 0.6rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 0.95rem; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+
+        .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end; }
+
+        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+        th { background: #334155; padding: 1rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; }
+        tr { background: #1e293b; transition: background 0.2s; }
+        tr:hover { background: #334155; }
+
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .badge-activo { background: #166534; color: #22c55e; }
+        .badge-inactivo { background: #7f1d1d; color: #ef4444; }
+        .badge-taller { background: #78350f; color: #f59e0b; }
+        .badge-remate { background: #581c87; color: #c084fc; }
+
+        .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
+        <div class="navbar-right">
+            <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
+            <a href="/">Inicio</a>
+            {% if session.rol == 'admin' %}
+            <a href="/usuarios">Usuarios</a>
+            {% endif %}
+            <a href="/logout">Cerrar Sesion</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="stats" id="stats">
+            <div class="stat-card total"><div class="number" id="st-total">-</div><div class="label">Total Vehiculos</div></div>
+            <div class="stat-card activos"><div class="number" id="st-activos">-</div><div class="label">Activos</div></div>
+            <div class="stat-card taller"><div class="number" id="st-taller">-</div><div class="label">En Taller</div></div>
+            <div class="stat-card inactivos"><div class="number" id="st-inactivos">-</div><div class="label">Inactivos</div></div>
+            <div class="stat-card remate"><div class="number" id="st-remate">-</div><div class="label">Remate</div></div>
+        </div>
+
+        <div class="actions">
+            <form action="/buscar" method="GET" style="display:flex; gap:1rem; flex:1; align-items:center; flex-wrap:wrap;">
+                <input type="text" name="q" class="search-box" placeholder="Buscar por placa, marca, ubicacion o chasis..." value="{{ busqueda|default('') }}" style="flex:2; min-width:200px;">
+                <select name="mecanica" style="padding:0.75rem 1rem; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#e2e8f0; font-size:0.95rem;">
+                    <option value="">Todas las Mecanicas</option>
+                    {% for m in mecanicas %}
+                    <option value="{{ m.mecanica }}" {% if mecanica_actual == m.mecanica %}selected{% endif %}>{{ m.mecanica }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary">Buscar</button>
+                {% if mecanica_actual %}
+                <a href="/" class="btn btn-danger btn-sm">Limpiar Filtro</a>
+                {% endif %}
+            </form>
+            <button class="btn btn-success" onclick="document.getElementById('modal-agregar').classList.add('active')">+ Agregar Vehiculo</button>
+            <a href="/exportar-excel" class="btn btn-primary" style="background:#16a34a;">Exportar Excel</a>
+            {% if session.rol == 'admin' %}
+            <button class="btn btn-primary" style="background:#ea580c;" onclick="document.getElementById('modal-importar').classList.add('active')">Importar Excel</button>
+            <button class="btn btn-primary" style="background:#7c3aed;" onclick="syncExcel()">Sync a Excel</button>
+            {% endif %}
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Mecanica</th>
+                    <th>Marca/Modelo</th>
+                    <th>Chasis</th>
+                    <th>Motor</th>
+                    <th>Kilometraje</th>
+                    <th>Ubicacion</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vehiculos %}
+                <tr>
+                    <td><strong>{{ v.placa }}</strong></td>
+                    <td>{{ v.mecanica or 'Multimarcas' }}</td>
+                    <td>{{ v.marca }} {{ v.modelo }}</td>
+                    <td>{{ v.chasis }}</td>
+                    <td>{{ v.motor }}</td>
+                    <td>{{ "{:,}".format(v.kilometraje) }} km</td>
+                    <td>{{ v.ubicacion }}</td>
+                    <td>
+                        {% if v.estado == 'Activo' %}
+                            <span class="badge badge-activo">Activo</span>
+                        {% elif v.estado == 'En Taller' %}
+                            <span class="badge badge-taller">En Taller</span>
+                        {% elif v.estado == 'Remate' %}
+                            <span class="badge badge-remate">Remate</span>
+                        {% else %}
+                            <span class="badge badge-inactivo">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="acciones">
+                        <a href="/vehiculo/{{ v.id }}" class="btn btn-primary btn-sm">Ver</a>
+                        {% if session.rol == 'admin' %}
+                        <button class="btn btn-primary btn-sm" onclick='editar({{ v|tojson_filter }})'>Editar</button>
+                        <a href="/eliminar/{{ v.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este vehiculo?')">X</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not vehiculos %}
+                <tr><td colspan="9" style="text-align:center; padding:2rem; color:#64748b;">No hay vehiculos registrados</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal Agregar -->
+    <div class="modal-overlay" id="modal-agregar">
+        <div class="modal">
+            <h2>Agregar Vehiculo</h2>
+            <form action="/agregar" method="POST">
+                <div class="form-grid">
+                    <div class="form-group"><label>Placa *</label><input type="text" name="placa" required></div>
+                    <div class="form-group"><label>Mecanica *</label>
+                        <select name="mecanica" required>
+                            <option value="Multimarcas">Multimarcas</option>
+                            <option value="Kia">Kia</option>
+                            <option value="Ambacar">Ambacar</option>
+                            <option value="Chevrolet">Chevrolet</option>
+                            <option value="Pesados">Pesados</option>
+                            <option value="Great Wall 2025">Great Wall 2025</option>
+                            <option value="Great Wall 2026">Great Wall 2026</option>
+                            <option value="Motos Multimarcas">Motos Multimarcas</option>
+                            <option value="Honda">Honda</option>
+                            <option value="Morini">Morini</option>
+                            <option value="Kia Tasman">Kia Tasman</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Marca</label><input type="text" name="marca"></div>
+                    <div class="form-group"><label>Modelo</label><input type="text" name="modelo"></div>
+                    <div class="form-group"><label>Anio</label><input type="number" name="anio"></div>
+                    <div class="form-group"><label>Chasis</label><input type="text" name="chasis"></div>
+                    <div class="form-group"><label>Motor</label><input type="text" name="motor"></div>
+                    <div class="form-group"><label>Kilometraje</label><input type="number" name="kilometraje" value="0"></div>
+                    <div class="form-group"><label>Ubicacion</label><input type="text" name="ubicacion"></div>
+                    <div class="form-group full"><label>Estado</label>
+                        <select name="estado">
+                            <option value="Activo">Activo</option>
+                            <option value="En Taller">En Taller</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="Remate">Remate</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar -->
+    <div class="modal-overlay" id="modal-editar">
+        <div class="modal">
+            <h2>Editar Vehiculo</h2>
+            <form id="form-editar" method="POST">
+                <div class="form-grid">
+                    <div class="form-group"><label>Placa *</label><input type="text" name="placa" id="ed-placa" required></div>
+                    <div class="form-group"><label>Mecanica *</label>
+                        <select name="mecanica" id="ed-mecanica" required>
+                            <option value="Multimarcas">Multimarcas</option>
+                            <option value="Kia">Kia</option>
+                            <option value="Ambacar">Ambacar</option>
+                            <option value="Chevrolet">Chevrolet</option>
+                            <option value="Pesados">Pesados</option>
+                            <option value="Great Wall 2025">Great Wall 2025</option>
+                            <option value="Great Wall 2026">Great Wall 2026</option>
+                            <option value="Motos Multimarcas">Motos Multimarcas</option>
+                            <option value="Honda">Honda</option>
+                            <option value="Morini">Morini</option>
+                            <option value="Kia Tasman">Kia Tasman</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Marca</label><input type="text" name="marca" id="ed-marca"></div>
+                    <div class="form-group"><label>Modelo</label><input type="text" name="modelo" id="ed-modelo"></div>
+                    <div class="form-group"><label>Anio</label><input type="number" name="anio" id="ed-anio"></div>
+                    <div class="form-group"><label>Chasis</label><input type="text" name="chasis" id="ed-chasis"></div>
+                    <div class="form-group"><label>Motor</label><input type="text" name="motor" id="ed-motor"></div>
+                    <div class="form-group"><label>Kilometraje</label><input type="number" name="kilometraje" id="ed-km"></div>
+                    <div class="form-group"><label>Ubicacion</label><input type="text" name="ubicacion" id="ed-ubicacion"></div>
+                    <div class="form-group full"><label>Estado</label>
+                        <select name="estado" id="ed-estado">
+                            <option value="Activo">Activo</option>
+                            <option value="En Taller">En Taller</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="Remate">Remate</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Actualizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Importar Excel -->
+    <div class="modal-overlay" id="modal-importar">
+        <div class="modal">
+            <h2>Importar desde Excel</h2>
+            <p style="color:#94a3b8; margin-bottom:1rem;">Selecciona un archivo .xlsx con las hojas "Vehiculos" y opcionalmente "Mantenimientos"</p>
+            <form action="/importar-excel" method="POST" enctype="multipart/form-data">
+                <div class="form-group full" style="margin-bottom:1rem;">
+                    <label>Archivo Excel (.xlsx)</label>
+                    <input type="file" name="archivo" accept=".xlsx,.xls" required style="padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0;">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer style="text-align:center; padding:2rem; color:#475569; font-size:0.85rem; border-top:1px solid #1e293b; margin-top:3rem;">
+        <div style="padding-left:2rem;">Creado por Poli. Loor Cevallos Willian Albiery</div>
+        <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
+    </footer>
+
+    <script>
+        function editar(v) {
+            document.getElementById('form-editar').action = '/editar/' + v.id;
+            document.getElementById('ed-placa').value = v.placa || '';
+            document.getElementById('ed-mecanica').value = v.mecanica || 'Multimarcas';
+            document.getElementById('ed-marca').value = v.marca || '';
+            document.getElementById('ed-modelo').value = v.modelo || '';
+            document.getElementById('ed-anio').value = v.anio || '';
+            document.getElementById('ed-chasis').value = v.chasis || '';
+            document.getElementById('ed-motor').value = v.motor || '';
+            document.getElementById('ed-km').value = v.kilometraje || 0;
+            document.getElementById('ed-ubicacion').value = v.ubicacion || '';
+            document.getElementById('ed-estado').value = v.estado || 'Activo';
+            document.getElementById('modal-editar').classList.add('active');
+        }
+
+        function syncExcel() {
+            fetch('/sync-excel', { method: 'POST' })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status === 'ok') {
+                        alert('Excel sincronizado!\n\nArchivo guardado en:\n' + d.file);
+                    }
+                })
+                .catch(e => alert('Error al sincronizar'));
+        }
+
+        fetch('/api/estadisticas').then(r => r.json()).then(d => {
+            document.getElementById('st-total').textContent = d.total;
+            document.getElementById('st-activos').textContent = d.activos;
+            document.getElementById('st-taller').textContent = d.en_taller;
+            document.getElementById('st-inactivos').textContent = d.inactivos;
+            document.getElementById('st-remate').textContent = d.remate;
+        });
+
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        });
+    </script>
+</body>
+</html>

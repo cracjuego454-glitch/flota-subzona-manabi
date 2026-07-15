@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+flota.db
+uploads/
+*.xlsx
+.env
