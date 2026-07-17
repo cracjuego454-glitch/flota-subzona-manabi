@@ -105,6 +105,20 @@ def init_db():
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS parte_taller (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            placa TEXT NOT NULL,
+            mecanica TEXT,
+            motivo TEXT,
+            observaciones TEXT,
+            fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_salida TIMESTAMP,
+            registrado_por TEXT,
+            FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
+        )
+    """)
     cur.execute("SELECT id FROM usuarios WHERE rol='admin'")
     admin = cur.fetchone()
     if not admin:
@@ -751,6 +765,72 @@ def importar_excel(filepath):
     cur.close()
     conn.close()
     return imported, updated
+
+
+@app.route("/parte-taller")
+@login_required
+def parte_taller():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    filtro = request.args.get("filtro", "activos")
+    if filtro == "salidos":
+        cur.execute("""
+            SELECT pt.*, v.marca, v.modelo
+            FROM parte_taller pt
+            LEFT JOIN vehiculos v ON pt.vehiculo_id = v.id
+            WHERE pt.fecha_salida IS NOT NULL
+            ORDER BY pt.fecha_salida DESC LIMIT 100
+        """)
+    else:
+        cur.execute("""
+            SELECT pt.*, v.marca, v.modelo
+            FROM parte_taller pt
+            LEFT JOIN vehiculos v ON pt.vehiculo_id = v.id
+            WHERE pt.fecha_salida IS NULL
+            ORDER BY pt.fecha_ingreso DESC
+        """)
+    registros = cur.fetchall()
+    cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
+    vehiculos = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro)
+
+
+@app.route("/parte-taller/ingresar", methods=["POST"])
+@login_required
+def parte_taller_ingresar():
+    conn = get_db()
+    cur = conn.cursor()
+    vehiculo_id = request.form["vehiculo_id"]
+    cur.execute("SELECT placa, mecanica FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    v = cur.fetchone()
+    if v:
+        cur.execute("""
+            INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, observaciones, fecha_ingreso, registrado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
+        cur.execute("UPDATE vehiculos SET estado='En Taller' WHERE id=%s", (vehiculo_id,))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
+@app.route("/parte-taller/salir/<int:id>")
+@login_required
+def parte_taller_salir(id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT vehiculo_id FROM parte_taller WHERE id=%s AND fecha_salida IS NULL", (id,))
+    reg = cur.fetchone()
+    if reg:
+        cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))
+        cur.execute("UPDATE vehiculos SET estado='Activo' WHERE id=%s", (reg["vehiculo_id"],))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
 
 
 @app.route("/reportes")

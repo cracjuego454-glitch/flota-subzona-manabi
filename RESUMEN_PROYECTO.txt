@@ -1,0 +1,69 @@
+========================================
+FLOTA VEHICULAR SUBZONA MANABI
+Resumen del Proyecto - Copiar y Pegar en nuevo chat
+========================================
+
+--- QUE ES ---
+Sistema web de gestion de flota vehicular policial para la Policía Nacional del Ecuador - Subzona Manabi. Login, vehículos, mantenimientos, reportes, exportación Excel.
+
+--- CREDENCIALES ---
+Usuario: admin
+Contraseña: Willian098
+Rol Admin: acceso total (agregar, editar, borrar)
+Rol Operador: solo agregar y ver (no puede editar ni borrar)
+
+--- COORDINADOR ---
+Poli. Loor Cevallos Willian Albiery / Coordinador Mecanico
+
+--- URLs ---
+GitHub: https://github.com/cracjuego454-glitch/flota-subzona-manabi
+Render: https://flota-subzona-manabi.onrender.com
+PostgreSQL: postgresql://flota:uGwdyTgdlfi6ybbgF0ARyYe9YPVE8OvW@dpg-d9bekrfavr4c73ah17s0-a.virginia-postgres.render.com/flota_0mw8
+
+--- BASE DE DATOS ---
+PostgreSQL en Render (Virginia). Todo en español. Hora Ecuador (UTC-5).
+Env vars en Render: DATABASE_URL y SECRET_KEY (ya configuradas).
+
+--- MECANICAS (11) ---
+Multimarcas, Kia, Ambacar, Chevrolet, Pesados, Great Wall 2025, Great Wall 2026, Motos Multimarcas, Honda, Morini, Kia Tasman
+
+--- ESTADOS DE VEHICULOS ---
+Activo, En Taller, Inactivo, Remate
+
+--- CARACTERISTICAS IMPLEMENTADAS ---
+1. Login/logout con roles (admin/operador)
+2. CRUD vehículos (agregar, editar, eliminar) con prevención de placas duplicadas
+3. CRUD mantenimientos vinculados a vehículos
+4. Filtro dinámico por mecánica en página principal
+5. Exportación Excel (hoja por mecánica + resumen)
+6. Importación Excel con upsert
+7. Página de Reportes (/reportes) con filtros por mecánica, tipo, rango de fechas; tarjetas de estadísticas; desglose por tipo y mecánica; tabla filtrada con badges de color
+8. Pie de página "Creado por Poli. Loor Cevallos Willian Albiery / Coordinador Mecanico" en todas las páginas
+9. Escudo de la Policía Nacional del Ecuador en login (descargado local en /static/escudo_policia.png)
+10. Fondo degradado + iconos animados en login
+11. Responsive móvil en todas las plantillas (index, detalle, reportes, login)
+12. Hora Ecuador: función fecha_local(), SET timezone por conexión
+13. Parte de Taller (/parte-taller): registro de ingreso/salida de vehículos al taller, tabla en tiempo real, historial de salidas
+
+--- IMPORTANTE ---
+- Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)
+- Siempre copiar cambios a flota-subzona-manabi/ antes de hacer push
+- PostgreSQL almacena timestamps en UTC; se usa fecha_local() para mostrar hora Ecuador
+- Placas duplicadas se ignoran silenciosamente (try/except IntegrityError)
+
+--- ARCHIVOS PRINCIPALES ---
+app.py: App Flask principal (PostgreSQL, todas las rutas)
+templates/login.html: Login con escudo policial, gradiente, iconos animados
+templates/index.html: Dashboard con stats, tabla vehículos, filtro mecánica
+templates/detalle.html: Detalle vehículo + historial mantenimientos
+templates/reportes.html: Reportes con filtros, estadísticas, tablas
+templates/parte_taller.html: Parte de taller - registro ingreso/salida vehículos
+templates/usuarios.html: Gestión de usuarios (admin)
+requirements.txt: flask, openpyxl, gunicorn, psycopg2-binary
+static/escudo_policia.png: Escudo Policía Nacional del Ecuador
+
+--- PROXIMO PASO ---
+(Ninguno pendiente. El usuario decide qué feature implementar siguiente.)
+
+--- INSTRUCCIONES PARA NUEVO CHAT ---
+Copiar todo este archivo y pegarlo en el chat. Decir "este es el resumen del proyecto, continuamos desde donde quedamos".
