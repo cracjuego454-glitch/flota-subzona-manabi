@@ -110,9 +110,7 @@
                     <th>Dias</th>
                     <th>Estado</th>
                     <th>Registrado por</th>
-                    {% if filtro == 'activos' %}
                     <th>Acciones</th>
-                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -141,11 +139,14 @@
                         {% endif %}
                     </td>
                     <td>{{ r.registrado_por }}</td>
-                    {% if filtro == 'activos' %}
                     <td class="acciones">
+                        {% if not r.fecha_salida %}
                         <a href="/parte-taller/salir/{{ r.id }}" class="btn btn-warning btn-sm" onclick="return confirm('Registrar salida del taller?')">Marcar Salida</a>
+                        {% endif %}
+                        {% if session.rol == 'admin' %}
+                        <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
+                        {% endif %}
                     </td>
-                    {% endif %}
                 </tr>
                 {% endfor %}
                 {% if not registros %}
@@ -169,12 +170,14 @@
                 <div class="form-grid">
                     <div class="form-group full">
                         <label>Vehiculo *</label>
-                        <select name="vehiculo_id" required>
+                        <input type="text" id="buscar-vehiculo" placeholder="Escriba la placa o marca..." autocomplete="off" style="padding:0.6rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.95rem; margin-bottom:0.5rem;">
+                        <select name="vehiculo_id" id="select-vehiculo" size="5" required style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.9rem;">
                             <option value="">Seleccionar vehiculo...</option>
                             {% for v in vehiculos %}
-                            <option value="{{ v.id }}">{{ v.placa }} - {{ v.marca }} {{ v.modelo }}</option>
+                            <option value="{{ v.id }}" data-text="{{ v.placa }} {{ v.marca }} {{ v.modelo }}">{{ v.placa }} - {{ v.marca }} {{ v.modelo }}</option>
                             {% endfor %}
                         </select>
+                        <div style="color:#64748b; font-size:0.8rem; margin-top:0.3rem;">Haz clic en un vehiculo de la lista</div>
                     </div>
                     <div class="form-group full">
                         <label>Motivo de ingreso *</label>
@@ -201,6 +204,25 @@
     <script>
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        });
+
+        const buscarInput = document.getElementById('buscar-vehiculo');
+        const selectVehiculo = document.getElementById('select-vehiculo');
+        const todasOpciones = Array.from(selectVehiculo.options).slice(1);
+
+        buscarInput.addEventListener('input', function() {
+            const texto = this.value.toLowerCase().trim();
+            selectVehiculo.innerHTML = '';
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = 'Seleccionar vehiculo...';
+            selectVehiculo.appendChild(defaultOpt);
+            if (!texto) {
+                todasOpciones.forEach(opt => selectVehiculo.appendChild(opt));
+                return;
+            }
+            const filtrados = todasOpciones.filter(opt => opt.dataset.text.toLowerCase().includes(texto));
+            filtrados.forEach(opt => selectVehiculo.appendChild(opt));
         });
     </script>
 </body>

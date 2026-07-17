@@ -833,6 +833,23 @@ def parte_taller_salir(id):
     return redirect(url_for("parte_taller"))
 
 
+@app.route("/parte-taller/eliminar/<int:id>")
+@admin_required
+def parte_taller_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT vehiculo_id, fecha_salida FROM parte_taller WHERE id=%s", (id,))
+    reg = cur.fetchone()
+    if reg:
+        if not reg["fecha_salida"]:
+            cur.execute("UPDATE vehiculos SET estado='Activo' WHERE id=%s", (reg["vehiculo_id"],))
+        cur.execute("DELETE FROM parte_taller WHERE id=%s", (id,))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
 @app.route("/reportes")
 @login_required
 def reportes():
