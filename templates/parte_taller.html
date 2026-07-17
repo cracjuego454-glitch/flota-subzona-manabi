@@ -105,9 +105,12 @@
                     <th>Mecanica</th>
                     <th>Marca/Modelo</th>
                     <th>Motivo</th>
+                    <th>Quien Ingresa</th>
+                    <th>Telefono</th>
                     <th>Ingreso</th>
                     <th>Salida</th>
                     <th>Dias</th>
+                    <th>Novedad</th>
                     <th>Estado</th>
                     <th>Registrado por</th>
                     <th>Acciones</th>
@@ -120,17 +123,18 @@
                     <td>{{ r.mecanica }}</td>
                     <td>{{ r.marca }} {{ r.modelo }}</td>
                     <td>{{ r.motivo }}</td>
+                    <td>{{ r.nombre_ingresa or '-' }}</td>
+                    <td>{{ r.telefono or '-' }}</td>
                     <td>{{ r.fecha_ingreso }}</td>
                     <td>{{ r.fecha_salida or '---' }}</td>
                     <td>
                         {% if not r.fecha_salida %}
                             <span class="dias">En curso</span>
                         {% else %}
-                            {% set f_in = r.fecha_ingreso|string %}
-                            {% set f_out = r.fecha_salida|string %}
-                            {{ f_out[:10] }}
+                            <span style="color:#22c55e; font-weight:700;">{{ r.dias }} dia{{ 's' if r.dias != 1 }}</span>
                         {% endif %}
                     </td>
+                    <td>{{ r.novedad or '-' }}</td>
                     <td>
                         {% if r.fecha_salida %}
                             <span class="badge badge-completado">Completado</span>
@@ -181,10 +185,22 @@
                     </div>
                     <div class="form-group full">
                         <label>Motivo de ingreso *</label>
-                        <textarea name="motivo" rows="3" required placeholder="Ej: Cambio de aceite, Reparacion de motor, Frenos..."></textarea>
+                        <textarea name="motivo" rows="2" required placeholder="Ej: Cambio de aceite, Reparacion de motor, Frenos..."></textarea>
                     </div>
                     <div class="form-group full">
-                        <label>Observaciones</label>
+                        <label>Nombre de quien ingresa *</label>
+                        <input type="text" name="nombre_ingresa" required placeholder="Nombre completo">
+                    </div>
+                    <div class="form-group full">
+                        <label>Telefono de contacto</label>
+                        <input type="text" name="telefono" placeholder="0991234567">
+                    </div>
+                    <div class="form-group full">
+                        <label>Novedad</label>
+                        <textarea name="novedad" rows="2" placeholder="Observaciones, detalles, novedades..."></textarea>
+                    </div>
+                    <div class="form-group full">
+                        <label>Observaciones internas</label>
                         <textarea name="observaciones" rows="2" placeholder="Detalles adicionales..."></textarea>
                     </div>
                 </div>

@@ -112,6 +112,9 @@ def init_db():
             placa TEXT NOT NULL,
             mecanica TEXT,
             motivo TEXT,
+            nombre_ingresa TEXT,
+            telefono TEXT,
+            novedad TEXT,
             observaciones TEXT,
             fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             fecha_salida TIMESTAMP,
@@ -126,6 +129,19 @@ def init_db():
             "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (%s, %s, %s, %s)",
             ("admin", generate_password_hash("Willian098"), "Administrador", "admin")
         )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def add_columns_parte_taller():
+    conn = get_db()
+    cur = conn.cursor()
+    for col in ['nombre_ingresa TEXT', 'telefono TEXT', 'novedad TEXT']:
+        try:
+            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+        except Exception:
+            pass
     conn.commit()
     cur.close()
     conn.close()
@@ -790,6 +806,27 @@ def parte_taller():
             ORDER BY pt.fecha_ingreso DESC
         """)
     registros = cur.fetchall()
+    ahora = datetime.now(ECUADOR_TZ)
+    for r in registros:
+        if r["fecha_salida"]:
+            fi = r["fecha_ingreso"]
+            fs = r["fecha_salida"]
+            if hasattr(fi, 'replace') and hasattr(fs, 'replace'):
+                if fi.tzinfo is None:
+                    fi = fi.replace(tzinfo=ECUADOR_TZ)
+                if fs.tzinfo is None:
+                    fs = fs.replace(tzinfo=ECUADOR_TZ)
+                r["dias"] = (fs - fi).days
+            else:
+                r["dias"] = 0
+        else:
+            fi = r["fecha_ingreso"]
+            if hasattr(fi, 'replace'):
+                if fi.tzinfo is None:
+                    fi = fi.replace(tzinfo=ECUADOR_TZ)
+                r["dias"] = (ahora - fi).days
+            else:
+                r["dias"] = 0
     cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
     vehiculos = cur.fetchall()
     cur.close()
@@ -807,9 +844,9 @@ def parte_taller_ingresar():
     v = cur.fetchone()
     if v:
         cur.execute("""
-            INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, observaciones, fecha_ingreso, registrado_por)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
+            INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, nombre_ingresa, telefono, novedad, observaciones, fecha_ingreso, registrado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("nombre_ingresa", ""), request.form.get("telefono", ""), request.form.get("novedad", ""), request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
         cur.execute("UPDATE vehiculos SET estado='En Taller' WHERE id=%s", (vehiculo_id,))
         conn.commit()
     cur.close()
@@ -929,6 +966,7 @@ def reportes():
 
 
 init_db()
+add_columns_parte_taller()
 
 
 @app.route("/health")
