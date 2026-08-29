@@ -1,21 +1,29 @@
-import sqlite3
 import os
 import json
 import secrets
+import psycopg2
+import psycopg2.extras
 from functools import wraps
 from io import BytesIO
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session
+from urllib.parse import urlparse
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session, flash, get_flashed_messages
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.json.ensure_ascii = False
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flota.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 EXCEL_FILE = "flota_vehicular.xlsx"
+
+
+ECUADOR_TZ = timezone(timedelta(hours=-5))
+
+def fecha_local():
+    return datetime.now(ECUADOR_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @app.template_filter("tojson_filter")
@@ -24,16 +32,42 @@ def tojson_filter(obj):
 
 
 def get_db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
+    url = urlparse(DATABASE_URL)
+    conn = psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port,
+        sslmode='require'
+    )
+    conn.autocommit = False
+    cur = conn.cursor()
+    cur.execute("SET timezone = 'America/Guayaquil'")
+    cur.close()
     return conn
+
+
+def dict_row(cursor):
+    colnames = [d[0] for d in cursor.description]
+    row = cursor.fetchone()
+    if row:
+        return dict(zip(colnames, row))
+    return None
+
+
+def dict_rows(cursor):
+    colnames = [d[0] for d in cursor.description]
+    rows = cursor.fetchall()
+    return [dict(zip(colnames, r)) for r in rows]
 
 
 def init_db():
     conn = get_db()
-    conn.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             usuario TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
             nombre TEXT,
@@ -41,9 +75,9 @@ def init_db():
             fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS vehiculos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             placa TEXT NOT NULL UNIQUE,
             chasis TEXT,
             motor TEXT,
@@ -54,37 +88,119 @@ def init_db():
             ubicacion TEXT,
             estado TEXT DEFAULT 'Activo',
             creado_por TEXT,
+            mecanica TEXT DEFAULT 'Multimarcas',
             fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS mantenimientos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             vehiculo_id INTEGER NOT NULL,
             fecha TEXT NOT NULL,
             tipo TEXT,
             descripcion TEXT,
             kilometraje INTEGER,
             costo REAL DEFAULT 0,
+            costo_mo REAL DEFAULT 0,
+            costo_lub REAL DEFAULT 0,
+            costo_rep REAL DEFAULT 0,
             taller TEXT,
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
     """)
-    admin = conn.execute("SELECT id FROM usuarios WHERE rol='admin'").fetchone()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS piezas (
+            id SERIAL PRIMARY KEY,
+            nombre TEXT NOT NULL,
+            tipo TEXT DEFAULT 'repuesto',
+            vida_km INTEGER DEFAULT 0,
+            vida_meses INTEGER DEFAULT 0,
+            costo REAL DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS piezas_vehiculo (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            placa TEXT,
+            pieza_id INTEGER,
+            nombre TEXT,
+            tipo TEXT DEFAULT 'repuesto',
+            fecha_ingreso TEXT,
+            km_ingreso INTEGER DEFAULT 0,
+            vida_km INTEGER DEFAULT 0,
+            vida_meses INTEGER DEFAULT 0,
+            costo REAL DEFAULT 0,
+            mantenimiento_id INTEGER,
+            observaciones TEXT,
+            FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS parte_taller (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            placa TEXT NOT NULL,
+            mecanica TEXT,
+            motivo TEXT,
+            nombre_ingresa TEXT,
+            telefono TEXT,
+            novedad TEXT,
+            observaciones TEXT,
+            fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_salida TIMESTAMP,
+            registrado_por TEXT,
+            FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
+        )
+    """)
+    cur.execute("SELECT id FROM usuarios WHERE rol='admin'")
+    admin = cur.fetchone()
     if not admin:
-        conn.execute(
-            "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (?, ?, ?, ?)",
+        cur.execute(
+            "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (%s, %s, %s, %s)",
             ("admin", generate_password_hash("Willian098"), "Administrador", "admin")
         )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def add_columns_parte_taller():
+    conn = get_db()
+    cur = conn.cursor()
+    for col in ['nombre_ingresa TEXT', 'telefono TEXT', 'novedad TEXT']:
+        try:
+            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+        except Exception:
+            pass
+    for col in ['costo_mo REAL DEFAULT 0', 'costo_lub REAL DEFAULT 0', 'costo_rep REAL DEFAULT 0']:
+        try:
+            cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN {col}")
+        except Exception:
+            pass
+    for col in ['tipo TEXT DEFAULT \'repuesto\'']:
+        try:
+            cur.execute(f"ALTER TABLE piezas ADD COLUMN {col}")
+        except Exception:
+            pass
     try:
-        conn.execute("ALTER TABLE vehiculos ADD COLUMN creado_por TEXT")
-    except sqlite3.OperationalError:
+        cur.execute("ALTER TABLE piezas_vehiculo ADD COLUMN observaciones TEXT")
+    except Exception:
         pass
     try:
-        conn.execute("ALTER TABLE vehiculos ADD COLUMN mecanica TEXT DEFAULT 'Multimarcas'")
-    except sqlite3.OperationalError:
+        cur.execute("ALTER TABLE piezas ALTER COLUMN vehiculo_id DROP NOT NULL")
+    except Exception:
+        pass
+    try:
+        cur.execute("""
+            UPDATE piezas SET vehiculo_id = NULL, placa = NULL,
+            km_instalacion = 0, fecha_instalacion = NULL, observaciones = NULL
+            WHERE vehiculo_id IS NOT NULL
+        """)
+    except Exception:
         pass
     conn.commit()
+    cur.close()
     conn.close()
 
 
@@ -115,7 +231,10 @@ def login():
         usuario = request.form["usuario"].strip()
         password = request.form["password"]
         conn = get_db()
-        user = conn.execute("SELECT * FROM usuarios WHERE usuario=?", (usuario,)).fetchone()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM usuarios WHERE usuario=%s", (usuario,))
+        user = cur.fetchone()
+        cur.close()
         conn.close()
         if user and check_password_hash(user["password"], password):
             session["user_id"] = user["id"]
@@ -137,7 +256,10 @@ def logout():
 @admin_required
 def gestionar_usuarios():
     conn = get_db()
-    usuarios = conn.execute("SELECT * FROM usuarios ORDER BY id").fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM usuarios ORDER BY id")
+    usuarios = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template("usuarios.html", usuarios=usuarios)
 
@@ -150,14 +272,16 @@ def crear_usuario():
     nombre = request.form["nombre"].strip()
     rol = request.form["rol"]
     conn = get_db()
+    cur = conn.cursor()
     try:
-        conn.execute(
-            "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (?, ?, ?, ?)",
+        cur.execute(
+            "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (%s, %s, %s, %s)",
             (usuario, generate_password_hash(password), nombre, rol)
         )
         conn.commit()
-    except sqlite3.IntegrityError:
-        pass
+    except psycopg2.IntegrityError:
+        conn.rollback()
+    cur.close()
     conn.close()
     return redirect(url_for("gestionar_usuarios"))
 
@@ -168,8 +292,10 @@ def eliminar_usuario(id):
     if id == session.get("user_id"):
         return redirect(url_for("gestionar_usuarios"))
     conn = get_db()
-    conn.execute("DELETE FROM usuarios WHERE id=? AND rol != 'admin'", (id,))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM usuarios WHERE id=%s AND rol != 'admin'", (id,))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("gestionar_usuarios"))
 
@@ -178,12 +304,16 @@ def eliminar_usuario(id):
 @login_required
 def index():
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     mecanica_filter = request.args.get("mecanica", "")
     if mecanica_filter:
-        vehiculos = conn.execute("SELECT * FROM vehiculos WHERE mecanica=? ORDER BY id DESC", (mecanica_filter,)).fetchall()
+        cur.execute("SELECT * FROM vehiculos WHERE mecanica=%s ORDER BY id DESC", (mecanica_filter,))
     else:
-        vehiculos = conn.execute("SELECT * FROM vehiculos ORDER BY id DESC").fetchall()
-    mecanicas = conn.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica").fetchall()
+        cur.execute("SELECT * FROM vehiculos ORDER BY id DESC")
+    vehiculos = cur.fetchall()
+    cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
+    mecanicas = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template("index.html", vehiculos=vehiculos, mecanicas=mecanicas, mecanica_actual=mecanica_filter)
 
@@ -192,24 +322,31 @@ def index():
 @login_required
 def agregar():
     conn = get_db()
-    conn.execute("""
-        INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        request.form["placa"].upper(),
-        request.form["chasis"],
-        request.form["motor"],
-        request.form["marca"],
-        request.form["modelo"],
-        request.form["anio"],
-        request.form["kilometraje"],
-        request.form["ubicacion"],
-        request.form["estado"],
-        session.get("usuario", ""),
-        request.form.get("mecanica", "Multimarcas")
-    ))
-    conn.commit()
-    conn.close()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, creado_por, mecanica, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            request.form["placa"].upper(),
+            request.form["chasis"],
+            request.form["motor"],
+            request.form["marca"],
+            request.form["modelo"],
+            request.form["anio"],
+            request.form["kilometraje"],
+            request.form["ubicacion"],
+            request.form["estado"],
+            session.get("usuario", ""),
+            request.form.get("mecanica", "Multimarcas"),
+            fecha_local()
+        ))
+        conn.commit()
+    except psycopg2.IntegrityError:
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
     return redirect(url_for("index"))
 
 
@@ -217,10 +354,11 @@ def agregar():
 @admin_required
 def editar(id):
     conn = get_db()
-    conn.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         UPDATE vehiculos
-        SET placa=?, chasis=?, motor=?, marca=?, modelo=?, anio=?, kilometraje=?, ubicacion=?, estado=?, mecanica=?
-        WHERE id=?
+        SET placa=%s, chasis=%s, motor=%s, marca=%s, modelo=%s, anio=%s, kilometraje=%s, ubicacion=%s, estado=%s, mecanica=%s
+        WHERE id=%s
     """, (
         request.form["placa"].upper(),
         request.form["chasis"],
@@ -235,6 +373,7 @@ def editar(id):
         id
     ))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("index"))
 
@@ -243,8 +382,10 @@ def editar(id):
 @admin_required
 def eliminar(id):
     conn = get_db()
-    conn.execute("DELETE FROM vehiculos WHERE id=?", (id,))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM vehiculos WHERE id=%s", (id,))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("index"))
 
@@ -253,32 +394,138 @@ def eliminar(id):
 @login_required
 def detalle(id):
     conn = get_db()
-    vehiculo = conn.execute("SELECT * FROM vehiculos WHERE id=?", (id,)).fetchone()
-    historial = conn.execute(
-        "SELECT * FROM mantenimientos WHERE vehiculo_id=? ORDER BY fecha DESC", (id,)
-    ).fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM vehiculos WHERE id=%s", (id,))
+    vehiculo = cur.fetchone()
+    cur.execute("SELECT * FROM mantenimientos WHERE vehiculo_id=%s ORDER BY fecha DESC", (id,))
+    historial = cur.fetchall()
+    cur.execute("SELECT * FROM piezas ORDER BY nombre ASC")
+    catalogo = cur.fetchall()
+
+    cur.execute("SELECT * FROM piezas_vehiculo WHERE vehiculo_id=%s ORDER BY id DESC", (id,))
+    piezas_veh = cur.fetchall()
+    ahora = datetime.now(ECUADOR_TZ)
+    for p in piezas_veh:
+        km_recorridos = (vehiculo["kilometraje"] or 0) - (p.get("km_ingreso") or 0)
+        km_faltan = (p.get("vida_km") or 0) - km_recorridos
+        p["km_recorridos"] = max(km_recorridos, 0)
+        p["km_faltan"] = km_faltan
+        meses_transcurridos = 9999
+        if p.get("fecha_ingreso"):
+            try:
+                fi = datetime.strptime(str(p["fecha_ingreso"])[:10], "%Y-%m-%d")
+                dias = (ahora - fi.replace(tzinfo=ECUADOR_TZ)).days
+                meses_transcurridos = dias / 30.44
+            except Exception:
+                meses_transcurridos = 0
+        p["meses_faltan"] = round((p.get("vida_meses") or 0) - meses_transcurridos, 1) if meses_transcurridos != 9999 else None
+        vencida = km_faltan <= 0 or (p.get("vida_meses") and p["meses_faltan"] is not None and p["meses_faltan"] <= 0)
+        por_vencer = (0 < km_faltan <= (p.get("vida_km") or 0) * 0.15) or (p["meses_faltan"] is not None and 0 < p["meses_faltan"] <= (p.get("vida_meses") or 0) * 0.15)
+        if vencida:
+            p["estado"] = "Vencida"
+        elif por_vencer:
+            p["estado"] = "Por vencer"
+        else:
+            p["estado"] = "En vida util"
+
+    cur.close()
     conn.close()
-    return render_template("detalle.html", vehiculo=vehiculo, historial=historial)
+    return render_template("detalle.html", vehiculo=vehiculo, historial=historial, catalogo=catalogo, piezas_veh=piezas_veh)
 
 
 @app.route("/mantenimiento/<int:vehiculo_id>", methods=["POST"])
 @login_required
 def agregar_mantenimiento(vehiculo_id):
     conn = get_db()
-    conn.execute("""
-        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, taller)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+    cur = conn.cursor()
+    costo_mo = float(request.form.get("costo_mo") or 0)
+    costo_lub = float(request.form.get("costo_lub") or 0)
+    costo_rep = float(request.form.get("costo_rep") or 0)
+    costo_total = costo_mo + costo_lub + costo_rep
+    cur.execute("""
+        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         vehiculo_id,
         request.form["fecha"],
         request.form["tipo"],
         request.form["descripcion"],
         request.form["kilometraje"],
-        request.form["costo"],
+        costo_total,
+        costo_mo,
+        costo_lub,
+        costo_rep,
         request.form["taller"]
     ))
-    conn.execute("UPDATE vehiculos SET kilometraje=? WHERE id=?", (request.form["kilometraje"], vehiculo_id))
+    cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
+
+    cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    rp = cur.fetchone()
+    placa = rp[0] if rp else ""
+
+    km_actual_mant = int(request.form.get("kilometraje") or 0)
+
+    cur.execute("SELECT id, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses FROM piezas_vehiculo WHERE vehiculo_id=%s AND pieza_id IS NOT NULL", (vehiculo_id,))
+    existentes = cur.fetchall()
+
+    def pieza_activa(pz):
+        pid, fecha, km_ing, vida_km, vida_meses = pz[1], pz[4], pz[5], pz[6], pz[7]
+        km_rec = km_actual_mant - (km_ing or 0)
+        km_faltan = (vida_km or 0) - km_rec
+        m_faltan = None
+        if fecha:
+            try:
+                dias = (datetime.now(ECUADOR_TZ) - datetime.strptime(str(fecha)[:10], "%Y-%m-%d").replace(tzinfo=ECUADOR_TZ)).days
+                m_faltan = (vida_meses or 0) - dias / 30.44
+            except Exception:
+                pass
+        if km_faltan <= 0:
+            return False
+        if vida_km and km_faltan > 0:
+            if m_faltan is not None and m_faltan <= 0:
+                return False
+            return True
+        if m_faltan is not None and m_faltan <= 0:
+            return False
+        return True
+
+    activos = set()
+    for pz in existentes:
+        if pz[1] and pieza_activa(pz):
+            activos.add(pz[1])
+
+    bloqueados = []
+    i = 0
+    while True:
+        pieza_id = request.form.get(f"pv_pieza_{i}")
+        if pieza_id is None:
+            break
+        pieza_id = pieza_id.strip()
+        if pieza_id:
+            cur.execute("SELECT nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pieza_id,))
+            cat = cur.fetchone()
+            if cat:
+                except_razon = (request.form.get(f"pv_excepcion_{i}") or "").strip()
+                if pieza_id in activos and not except_razon:
+                    bloqueados.append(cat[1])
+                else:
+                    km_ing = int(request.form.get(f"pv_km_{i}") or km_actual_mant or 0)
+                    fech_ing = request.form.get(f"pv_fecha_{i}") or request.form.get("fecha") or fecha_local()
+                    cur.execute("""
+                        INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id, observaciones)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (vehiculo_id, placa, cat[0], cat[1], cat[2], fech_ing, km_ing, cat[3], cat[4], cat[5], None, except_razon or None))
+        i += 1
+
+    if bloqueados:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        flash("ALERTA: La pieza '" + ", ".join(bloqueados) + "' aun esta en vida util en este vehiculo. Marca la opcion EXCEPCION y escribe el motivo (ej: cambio por dano/golpe) para poder registrarla.", "warning")
+        return redirect(url_for("detalle", id=vehiculo_id))
+
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("detalle", id=vehiculo_id))
 
@@ -287,26 +534,37 @@ def agregar_mantenimiento(vehiculo_id):
 @admin_required
 def editar_mantenimiento(id):
     conn = get_db()
-    mant = conn.execute("SELECT vehiculo_id FROM mantenimientos WHERE id=?", (id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT vehiculo_id FROM mantenimientos WHERE id=%s", (id,))
+    mant = cur.fetchone()
     if not mant:
+        cur.close()
         conn.close()
         return redirect(url_for("index"))
     vehiculo_id = mant["vehiculo_id"]
-    conn.execute("""
+    costo_mo = float(request.form.get("costo_mo") or 0)
+    costo_lub = float(request.form.get("costo_lub") or 0)
+    costo_rep = float(request.form.get("costo_rep") or 0)
+    costo_total = costo_mo + costo_lub + costo_rep
+    cur.execute("""
         UPDATE mantenimientos
-        SET fecha=?, tipo=?, descripcion=?, kilometraje=?, costo=?, taller=?
-        WHERE id=?
+        SET fecha=%s, tipo=%s, descripcion=%s, kilometraje=%s, costo=%s, costo_mo=%s, costo_lub=%s, costo_rep=%s, taller=%s
+        WHERE id=%s
     """, (
         request.form["fecha"],
         request.form["tipo"],
         request.form["descripcion"],
         request.form["kilometraje"],
-        request.form["costo"],
+        costo_total,
+        costo_mo,
+        costo_lub,
+        costo_rep,
         request.form["taller"],
         id
     ))
-    conn.execute("UPDATE vehiculos SET kilometraje=? WHERE id=?", (request.form["kilometraje"], vehiculo_id))
+    cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("detalle", id=vehiculo_id))
 
@@ -315,13 +573,17 @@ def editar_mantenimiento(id):
 @admin_required
 def eliminar_mantenimiento(id):
     conn = get_db()
-    mant = conn.execute("SELECT vehiculo_id FROM mantenimientos WHERE id=?", (id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT vehiculo_id FROM mantenimientos WHERE id=%s", (id,))
+    mant = cur.fetchone()
     if not mant:
+        cur.close()
         conn.close()
         return redirect(url_for("index"))
     vehiculo_id = mant["vehiculo_id"]
-    conn.execute("DELETE FROM mantenimientos WHERE id=?", (id,))
+    cur.execute("DELETE FROM mantenimientos WHERE id=%s", (id,))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("detalle", id=vehiculo_id))
 
@@ -332,14 +594,18 @@ def buscar():
     q = request.args.get("q", "")
     mecanica_filter = request.args.get("mecanica", "")
     conn = get_db()
-    query = "SELECT * FROM vehiculos WHERE (placa LIKE ? OR marca LIKE ? OR ubicacion LIKE ? OR chasis LIKE ?)"
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    query = "SELECT * FROM vehiculos WHERE (placa ILIKE %s OR marca ILIKE %s OR ubicacion ILIKE %s OR chasis ILIKE %s)"
     params = [f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"]
     if mecanica_filter:
-        query += " AND mecanica=?"
+        query += " AND mecanica=%s"
         params.append(mecanica_filter)
     query += " ORDER BY id DESC"
-    vehiculos = conn.execute(query, params).fetchall()
-    mecanicas = conn.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica").fetchall()
+    cur.execute(query, params)
+    vehiculos = cur.fetchall()
+    cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
+    mecanicas = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template("index.html", vehiculos=vehiculos, busqueda=q, mecanicas=mecanicas, mecanica_actual=mecanica_filter)
 
@@ -348,11 +614,18 @@ def buscar():
 @login_required
 def estadisticas():
     conn = get_db()
-    total = conn.execute("SELECT COUNT(*) as c FROM vehiculos").fetchone()["c"]
-    activos = conn.execute("SELECT COUNT(*) as c FROM vehiculos WHERE estado='Activo'").fetchone()["c"]
-    inactivos = conn.execute("SELECT COUNT(*) as c FROM vehiculos WHERE estado='Inactivo'").fetchone()["c"]
-    taller = conn.execute("SELECT COUNT(*) as c FROM vehiculos WHERE estado='En Taller'").fetchone()["c"]
-    remate = conn.execute("SELECT COUNT(*) as c FROM vehiculos WHERE estado='Remate'").fetchone()["c"]
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM vehiculos")
+    total = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM vehiculos WHERE estado='Activo'")
+    activos = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM vehiculos WHERE estado='Inactivo'")
+    inactivos = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM vehiculos WHERE estado='En Taller'")
+    taller = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM vehiculos WHERE estado='Remate'")
+    remate = cur.fetchone()[0]
+    cur.close()
     conn.close()
     return jsonify({
         "total": total,
@@ -380,13 +653,16 @@ def exportar():
 @login_required
 def exportar_vehiculo(id):
     conn = get_db()
-    vehiculo = conn.execute("SELECT * FROM vehiculos WHERE id=?", (id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM vehiculos WHERE id=%s", (id,))
+    vehiculo = cur.fetchone()
     if not vehiculo:
+        cur.close()
         conn.close()
         return redirect(url_for("index"))
-    historial = conn.execute(
-        "SELECT * FROM mantenimientos WHERE vehiculo_id=? ORDER BY fecha DESC", (id,)
-    ).fetchall()
+    cur.execute("SELECT * FROM mantenimientos WHERE vehiculo_id=%s ORDER BY fecha DESC", (id,))
+    historial = cur.fetchall()
+    cur.close()
     conn.close()
 
     wb = Workbook()
@@ -482,15 +758,12 @@ def importar():
 @app.route("/sync-excel", methods=["POST"])
 @login_required
 def sync_excel():
-    buffer = exportar_excel()
-    filepath = os.path.join(os.path.dirname(os.path.abspath(DB)), EXCEL_FILE)
-    with open(filepath, "wb") as f:
-        f.write(buffer.getvalue())
-    return jsonify({"status": "ok", "file": filepath, "message": f"Excel guardado en: {filepath}"})
+    return jsonify({"status": "ok", "message": "Sync no disponible en version online"})
 
 
 def exportar_excel():
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     wb = Workbook()
     header_font = Font(bold=True, color="FFFFFF", size=11)
     thin_border = Border(
@@ -509,7 +782,8 @@ def exportar_excel():
         "Honda", "Morini", "Kia Tasman"
     ]
 
-    vehiculos = conn.execute("SELECT * FROM vehiculos ORDER BY id").fetchall()
+    cur.execute("SELECT * FROM vehiculos ORDER BY id")
+    vehiculos = cur.fetchall()
     ws_all = wb.active
     ws_all.title = "Todos los Vehiculos"
     fill_all = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
@@ -521,10 +795,7 @@ def exportar_excel():
         cell.border = thin_border
     for row_idx, v in enumerate(vehiculos, 2):
         for col_idx, key in enumerate(veh_cols, 1):
-            try:
-                val = v[key]
-            except (IndexError, KeyError):
-                val = ""
+            val = v.get(key, "") if v else ""
             cell = ws_all.cell(row=row_idx, column=col_idx, value=val)
             cell.border = thin_border
             if key == "kilometraje":
@@ -538,9 +809,8 @@ def exportar_excel():
         ws = wb.create_sheet(title=nombre[:31])
         fill = PatternFill(start_color=colores[idx], end_color=colores[idx], fill_type="solid")
 
-        vehiculos_mec = conn.execute(
-            "SELECT * FROM vehiculos WHERE mecanica=? ORDER BY id", (nombre,)
-        ).fetchall()
+        cur.execute("SELECT * FROM vehiculos WHERE mecanica=%s ORDER BY id", (nombre,))
+        vehiculos_mec = cur.fetchall()
 
         ws.cell(row=1, column=1, value=f"VEHICULOS - {nombre.upper()}").font = Font(bold=True, size=14, color=colores[idx])
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(veh_headers))
@@ -555,10 +825,7 @@ def exportar_excel():
         row_start = 3
         for row_idx, v in enumerate(vehiculos_mec):
             for col_idx, key in enumerate(veh_cols, 1):
-                try:
-                    val = v[key]
-                except (IndexError, KeyError):
-                    val = ""
+                val = v.get(key, "") if v else ""
                 cell = ws.cell(row=row_start + row_idx, column=col_idx, value=val)
                 cell.border = thin_border
                 if key == "kilometraje":
@@ -568,12 +835,13 @@ def exportar_excel():
             ws.cell(row=3, column=1, value="Sin vehiculos registrados").font = Font(italic=True, color="64748B")
 
         mant_row = row_start + len(vehiculos_mec) + 2
-        mant_mec = conn.execute("""
+        cur.execute("""
             SELECT m.*, v.placa FROM mantenimientos m
             LEFT JOIN vehiculos v ON m.vehiculo_id = v.id
-            WHERE v.mecanica=?
+            WHERE v.mecanica=%s
             ORDER BY m.fecha DESC
-        """, (nombre,)).fetchall()
+        """, (nombre,))
+        mant_mec = cur.fetchall()
 
         ws.cell(row=mant_row, column=1, value=f"HISTORIAL MANTENIMIENTO - {nombre.upper()}").font = Font(bold=True, size=14, color="22C55E")
         ws.merge_cells(start_row=mant_row, start_column=1, end_row=mant_row, end_column=len(mant_headers))
@@ -589,10 +857,7 @@ def exportar_excel():
 
         for row_idx, m in enumerate(mant_mec):
             for col_idx, key in enumerate(mant_cols, 1):
-                try:
-                    val = m[key]
-                except (IndexError, KeyError):
-                    val = ""
+                val = m.get(key, "") if m else ""
                 cell = ws.cell(row=mant_row + row_idx, column=col_idx, value=val)
                 cell.border = thin_border
                 if key == "costo":
@@ -611,17 +876,15 @@ def exportar_excel():
         cell.fill = fill_mant
         cell.alignment = Alignment(horizontal="center")
         cell.border = thin_border
-    mant_all = conn.execute("""
+    cur.execute("""
         SELECT m.*, v.placa FROM mantenimientos m
         LEFT JOIN vehiculos v ON m.vehiculo_id = v.id
         ORDER BY m.fecha DESC
-    """).fetchall()
+    """)
+    mant_all = cur.fetchall()
     for row_idx, m in enumerate(mant_all, 2):
         for col_idx, key in enumerate(mant_cols, 1):
-            try:
-                val = m[key]
-            except (IndexError, KeyError):
-                val = ""
+            val = m.get(key, "") if m else ""
             cell = ws_mant_all.cell(row=row_idx, column=col_idx, value=val)
             cell.border = thin_border
             if key == "costo":
@@ -629,6 +892,7 @@ def exportar_excel():
     for col in range(1, len(mant_headers) + 1):
         ws_mant_all.column_dimensions[get_column_letter(col)].width = 20
 
+    cur.close()
     conn.close()
     buffer = BytesIO()
     wb.save(buffer)
@@ -640,28 +904,30 @@ def importar_excel(filepath):
     wb = load_workbook(filepath)
     ws = wb["Vehiculos"]
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     imported = 0
     updated = 0
     for row in ws.iter_rows(min_row=2, values_only=True):
         if not row[1]:
             continue
         placa = str(row[1]).upper().strip()
-        existing = conn.execute("SELECT id FROM vehiculos WHERE placa=?", (placa,)).fetchone()
+        cur.execute("SELECT id FROM vehiculos WHERE placa=%s", (placa,))
+        existing = cur.fetchone()
         data = {
             "chasis": row[2] or "", "motor": row[3] or "", "marca": row[4] or "",
             "modelo": row[5] or "", "anio": row[6] or 0, "kilometraje": row[7] or 0,
             "ubicacion": row[8] or "", "estado": row[9] or "Activo", "mecanica": row[10] or "Multimarcas"
         }
         if existing:
-            conn.execute("""
-                UPDATE vehiculos SET chasis=?, motor=?, marca=?, modelo=?, anio=?, kilometraje=?, ubicacion=?, estado=?, mecanica=?
-                WHERE placa=?
+            cur.execute("""
+                UPDATE vehiculos SET chasis=%s, motor=%s, marca=%s, modelo=%s, anio=%s, kilometraje=%s, ubicacion=%s, estado=%s, mecanica=%s
+                WHERE placa=%s
             """, (data["chasis"], data["motor"], data["marca"], data["modelo"], data["anio"], data["kilometraje"], data["ubicacion"], data["estado"], data["mecanica"], placa))
             updated += 1
         else:
-            conn.execute("""
+            cur.execute("""
                 INSERT INTO vehiculos (placa, chasis, motor, marca, modelo, anio, kilometraje, ubicacion, estado, mecanica)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (placa, data["chasis"], data["motor"], data["marca"], data["modelo"], data["anio"], data["kilometraje"], data["ubicacion"], data["estado"], data["mecanica"]))
             imported += 1
     if "Mantenimientos" in wb.sheetnames:
@@ -670,22 +936,321 @@ def importar_excel(filepath):
             if not row[1]:
                 continue
             vehiculo_id = row[1]
-            v = conn.execute("SELECT id FROM vehiculos WHERE id=?", (vehiculo_id,)).fetchone()
+            cur.execute("SELECT id FROM vehiculos WHERE id=%s", (vehiculo_id,))
+            v = cur.fetchone()
             if v:
-                conn.execute("""
+                cur.execute("""
                     INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, taller)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (vehiculo_id, str(row[3] or ""), row[4] or "", row[5] or "", row[6] or 0, row[7] or 0, row[8] or ""))
     conn.commit()
+    cur.close()
     conn.close()
     return imported, updated
 
 
+@app.route("/parte-taller")
+@login_required
+def parte_taller():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    filtro = request.args.get("filtro", "activos")
+    if filtro == "salidos":
+        cur.execute("""
+            SELECT pt.*, v.marca, v.modelo
+            FROM parte_taller pt
+            LEFT JOIN vehiculos v ON pt.vehiculo_id = v.id
+            WHERE pt.fecha_salida IS NOT NULL
+            ORDER BY pt.fecha_salida DESC LIMIT 100
+        """)
+    else:
+        cur.execute("""
+            SELECT pt.*, v.marca, v.modelo
+            FROM parte_taller pt
+            LEFT JOIN vehiculos v ON pt.vehiculo_id = v.id
+            WHERE pt.fecha_salida IS NULL
+            ORDER BY pt.fecha_ingreso DESC
+        """)
+    registros = cur.fetchall()
+    ahora = datetime.now(ECUADOR_TZ)
+    for r in registros:
+        if r["fecha_salida"]:
+            fi = r["fecha_ingreso"]
+            fs = r["fecha_salida"]
+            if hasattr(fi, 'replace') and hasattr(fs, 'replace'):
+                if fi.tzinfo is None:
+                    fi = fi.replace(tzinfo=ECUADOR_TZ)
+                if fs.tzinfo is None:
+                    fs = fs.replace(tzinfo=ECUADOR_TZ)
+                r["dias"] = (fs - fi).days
+            else:
+                r["dias"] = 0
+        else:
+            fi = r["fecha_ingreso"]
+            if hasattr(fi, 'replace'):
+                if fi.tzinfo is None:
+                    fi = fi.replace(tzinfo=ECUADOR_TZ)
+                r["dias"] = (ahora - fi).days
+            else:
+                r["dias"] = 0
+    cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
+    vehiculos = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro)
+
+
+@app.route("/parte-taller/ingresar", methods=["POST"])
+@login_required
+def parte_taller_ingresar():
+    conn = get_db()
+    cur = conn.cursor()
+    vehiculo_id = request.form["vehiculo_id"]
+    cur.execute("SELECT placa, mecanica FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    v = cur.fetchone()
+    if v:
+        cur.execute("""
+            INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, nombre_ingresa, telefono, novedad, observaciones, fecha_ingreso, registrado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("nombre_ingresa", ""), request.form.get("telefono", ""), request.form.get("novedad", ""), request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
+        cur.execute("UPDATE vehiculos SET estado='En Taller' WHERE id=%s", (vehiculo_id,))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
+@app.route("/parte-taller/salir/<int:id>")
+@login_required
+def parte_taller_salir(id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM parte_taller WHERE id=%s AND fecha_salida IS NULL", (id,))
+    reg = cur.fetchone()
+    if reg:
+        fi = reg["fecha_ingreso"]
+        if hasattr(fi, 'strftime'):
+            fecha_str = fi.strftime("%Y-%m-%d")
+        else:
+            fecha_str = str(fi)[:10]
+
+        costo_mo = float(request.form.get("costo_mo") or 0)
+        costo_lub = float(request.form.get("costo_lub") or 0)
+        costo_rep = float(request.form.get("costo_rep") or 0)
+        costo_total = costo_mo + costo_lub + costo_rep
+
+        cur.execute("SELECT kilometraje FROM vehiculos WHERE id=%s", (reg["vehiculo_id"],))
+        v = cur.fetchone()
+        km_actual = (v["kilometraje"] or 0) if v else 0
+
+        tipo_mant = request.form.get("tipo_mantenimiento", "Correctivo")
+        descripcion = (reg["motivo"] or "") + (" | " + request.form.get("descripcion_mant", "") if request.form.get("descripcion_mant") else "")
+
+        cur.execute("""
+            INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (reg["vehiculo_id"], fecha_str, tipo_mant, descripcion, km_actual, costo_total, costo_mo, costo_lub, costo_rep, reg["mecanica"]))
+
+        km_instal = km_actual
+        holgura = 0
+        piezas_nombres = []
+        i = 0
+        while True:
+            nombre = request.form.get(f"pieza_{i}")
+            if nombre is None:
+                break
+            nombre = nombre.strip()
+            if nombre:
+                tipo_p = request.form.get(f"pieza_tipo_{i}", "repuesto")
+                vida_km = int(request.form.get(f"pieza_vida_km_{i}") or 0)
+                vida_meses = int(request.form.get(f"pieza_vida_meses_{i}") or 0)
+                costo_p = float(request.form.get(f"pieza_costo_{i}") or 0)
+                cur.execute("""
+                    INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id)
+                    VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, NULL)
+                """, (reg["vehiculo_id"], reg["placa"], nombre, tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p))
+                piezas_nombres.append(nombre)
+            i += 1
+
+        cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))
+        cur.execute("UPDATE vehiculos SET estado='Activo', kilometraje=%s WHERE id=%s", (km_actual, reg["vehiculo_id"]))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
+@app.route("/parte-taller/eliminar/<int:id>")
+@admin_required
+def parte_taller_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT vehiculo_id, fecha_salida FROM parte_taller WHERE id=%s", (id,))
+    reg = cur.fetchone()
+    if reg:
+        if not reg["fecha_salida"]:
+            cur.execute("UPDATE vehiculos SET estado='Activo' WHERE id=%s", (reg["vehiculo_id"],))
+        cur.execute("DELETE FROM parte_taller WHERE id=%s", (id,))
+        conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
+@app.route("/piezas")
+@login_required
+def piezas():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    tipo = request.args.get("tipo", "repuesto")
+    cur.execute("""
+        SELECT * FROM piezas
+        WHERE tipo = %s
+        ORDER BY nombre ASC
+    """, (tipo,))
+    piezas = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template("piezas.html", piezas=piezas, tipo=tipo)
+
+
+@app.route("/piezas/agregar", methods=["POST"])
+@login_required
+def piezas_agregar():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO piezas (nombre, tipo, vida_km, vida_meses, costo)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (
+        request.form["nombre"],
+        request.form.get("tipo", "repuesto"),
+        request.form.get("vida_km") or 0,
+        request.form.get("vida_meses") or 0,
+        request.form.get("costo") or 0
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("piezas", tipo=request.form.get("tipo", "repuesto")))
+
+
+@app.route("/piezas/eliminar/<int:id>")
+@admin_required
+def piezas_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT tipo FROM piezas WHERE id=%s", (id,))
+    r = cur.fetchone()
+    cur.execute("DELETE FROM piezas WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    tipo = r[0] if r else "repuesto"
+    return redirect(url_for("piezas", tipo=tipo))
+
+
+@app.route("/piezas-vehiculo/eliminar/<int:id>")
+@admin_required
+def pieza_vehiculo_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT vehiculo_id FROM piezas_vehiculo WHERE id=%s", (id,))
+    r = cur.fetchone()
+    cur.execute("DELETE FROM piezas_vehiculo WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    vid = r[0] if r else 0
+    return redirect(url_for("detalle", id=vid))
+
+
+@app.route("/reportes")
+@login_required
+def reportes():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    mecanica_filter = request.args.get("mecanica", "")
+    tipo_filter = request.args.get("tipo", "")
+    fecha_desde = request.args.get("fecha_desde", "")
+    fecha_hasta = request.args.get("fecha_hasta", "")
+
+    cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
+    mecanicas = cur.fetchall()
+
+    query = """
+        SELECT m.*, v.placa, v.mecanica, v.marca, v.modelo
+        FROM mantenimientos m
+        LEFT JOIN vehiculos v ON m.vehiculo_id = v.id
+        WHERE 1=1
+    """
+    params = []
+
+    if mecanica_filter:
+        query += " AND v.mecanica = %s"
+        params.append(mecanica_filter)
+    if tipo_filter:
+        query += " AND m.tipo = %s"
+        params.append(tipo_filter)
+    if fecha_desde:
+        query += " AND m.fecha >= %s"
+        params.append(fecha_desde)
+    if fecha_hasta:
+        query += " AND m.fecha <= %s"
+        params.append(fecha_hasta)
+
+    query += " ORDER BY m.fecha DESC"
+    cur.execute(query, params)
+    mantenimientos = cur.fetchall()
+
+    cur.execute("SELECT DISTINCT tipo FROM mantenimientos WHERE tipo IS NOT NULL AND tipo != '' ORDER BY tipo")
+    tipos = cur.fetchall()
+
+    total = len(mantenimientos)
+    correctivos = sum(1 for m in mantenimientos if m.get("tipo") == "Correctivo")
+    preventivos = sum(1 for m in mantenimientos if m.get("tipo") == "Preventivo")
+    otro = total - correctivos - preventivos
+    costo_total = sum(m.get("costo") or 0 for m in mantenimientos)
+
+    por_tipo = {}
+    for m in mantenimientos:
+        t = m.get("tipo") or "Sin tipo"
+        por_tipo[t] = por_tipo.get(t, 0) + 1
+
+    por_mecanica = {}
+    for m in mantenimientos:
+        mc = m.get("mecanica") or "Sin mecanica"
+        por_mecanica[mc] = por_mecanica.get(mc, 0) + 1
+
+    cur.close()
+    conn.close()
+    return render_template("reportes.html",
+        mantenimientos=mantenimientos,
+        mecanicas=mecanicas,
+        tipos=tipos,
+        total=total,
+        correctivos=correctivos,
+        preventivos=preventivos,
+        otro=otro,
+        costo_total=costo_total,
+        por_tipo=por_tipo,
+        por_mecanica=por_mecanica,
+        mecanica_actual=mecanica_filter,
+        tipo_actual=tipo_filter,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta
+    )
+
+
 init_db()
+add_columns_parte_taller()
+
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

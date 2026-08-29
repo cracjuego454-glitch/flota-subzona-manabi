@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parte de Taller - FLOTA VEHICULAR</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+        .navbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; }
+        .navbar h1 { color: #3b82f6; font-size: 1.5rem; }
+        .navbar-right { display: flex; align-items: center; gap: 1rem; }
+        .navbar a { color: #94a3b8; text-decoration: none; }
+        .navbar a:hover { color: #3b82f6; }
+        .navbar .user-info { color: #64748b; font-size: 0.85rem; }
+        .navbar .user-info strong { color: #e2e8f0; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+        .stat-card .number { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { color: #94a3b8; font-size: 0.9rem; }
+        .stat-card.total .number { color: #3b82f6; }
+        .stat-card.taller .number { color: #f59e0b; }
+        .stat-card.salidos .number { color: #22c55e; }
+        .actions { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; align-items: center; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; color: #1e293b; font-weight: 700; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .btn-active { background: #2563eb; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+        .modal h2 { margin-bottom: 1.5rem; color: #3b82f6; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-group label { color: #94a3b8; font-size: 0.85rem; }
+        .form-group input, .form-group select, .form-group textarea { padding: 0.6rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 0.95rem; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+        .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end; }
+        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+        th { background: #334155; padding: 1rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; }
+        tr { background: #1e293b; transition: background 0.2s; }
+        tr:hover { background: #334155; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .badge-encurso { background: #78350f; color: #f59e0b; }
+        .badge-completado { background: #166534; color: #22c55e; }
+        .dias { color: #f59e0b; font-weight: 700; }
+        .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        footer { text-align: center; padding: 2rem; color: #475569; font-size: 0.85rem; border-top: 1px solid #1e293b; margin-top: 3rem; }
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .number { font-size: 1.5rem; }
+            .actions { flex-direction: column; }
+            .form-grid { grid-template-columns: 1fr; }
+            .modal { padding: 1.5rem; width: 95%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
+        <div class="navbar-right">
+            <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
+            <a href="/">Inicio</a>
+            <a href="/parte-taller" style="color:#f59e0b; font-weight:700;">Parte de Taller</a>
+            <a href="/piezas">Piezas</a>
+            <a href="/reportes">Reportes</a>
+            {% if session.rol == 'admin' %}
+            <a href="/usuarios">Usuarios</a>
+            {% endif %}
+            <a href="/logout">Cerrar Sesion</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card total"><div class="number">{{ registros|length }}</div><div class="label">En Taller Ahora</div></div>
+        </div>
+
+        <div class="actions">
+            <a href="/parte-taller?filtro=activos" class="btn {% if filtro == 'activos' %}btn-active{% else %}btn-primary{% endif %}">En Taller</a>
+            <a href="/parte-taller?filtro=salidos" class="btn {% if filtro == 'salidos' %}btn-active{% else %}btn-primary{% endif %}">Historial (Salidos)</a>
+            <div style="flex:1;"></div>
+            <button class="btn btn-success" onclick="document.getElementById('modal-ingresar').classList.add('active')">+ Registrar Ingreso</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Mecanica</th>
+                    <th>Marca/Modelo</th>
+                    <th>Motivo</th>
+                    <th>Quien Ingresa</th>
+                    <th>Telefono</th>
+                    <th>Ingreso</th>
+                    <th>Salida</th>
+                    <th>Dias</th>
+                    <th>Novedad</th>
+                    <th>Estado</th>
+                    <th>Registrado por</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in registros %}
+                <tr>
+                    <td><strong>{{ r.placa }}</strong></td>
+                    <td>{{ r.mecanica }}</td>
+                    <td>{{ r.marca }} {{ r.modelo }}</td>
+                    <td>{{ r.motivo }}</td>
+                    <td>{{ r.nombre_ingresa or '-' }}</td>
+                    <td>{{ r.telefono or '-' }}</td>
+                    <td>{{ r.fecha_ingreso }}</td>
+                    <td>{{ r.fecha_salida or '---' }}</td>
+                    <td>
+                        {% if not r.fecha_salida %}
+                            <span class="dias">En curso</span>
+                        {% else %}
+                            <span style="color:#22c55e; font-weight:700;">{{ r.dias }} dia{{ 's' if r.dias != 1 }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r.novedad or '-' }}</td>
+                    <td>
+                        {% if r.fecha_salida %}
+                            <span class="badge badge-completado">Completado</span>
+                        {% else %}
+                            <span class="badge badge-encurso">En Taller</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r.registrado_por }}</td>
+                    <td class="acciones">
+                        {% if not r.fecha_salida %}
+                        <button class="btn btn-warning btn-sm" onclick="abrirSalida({{ r.id }}, {{ r.placa|tojson }})">Marcar Salida</button>
+                        {% endif %}
+                        {% if session.rol == 'admin' %}
+                        <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not registros %}
+                <tr><td colspan="10" style="text-align:center; padding:2rem; color:#64748b;">
+                    {% if filtro == 'activos' %}
+                    No hay vehiculos en el taller
+                    {% else %}
+                    No hay registros de salida
+                    {% endif %}
+                </td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal Registrar Ingreso -->
+    <div class="modal-overlay" id="modal-ingresar">
+        <div class="modal">
+            <h2>Registrar Ingreso al Taller</h2>
+            <form action="/parte-taller/ingresar" method="POST">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label>Vehiculo *</label>
+                        <input type="text" id="buscar-vehiculo" placeholder="Escriba la placa o marca..." autocomplete="off" style="padding:0.6rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.95rem; margin-bottom:0.5rem;">
+                        <select name="vehiculo_id" id="select-vehiculo" size="5" required style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.9rem;">
+                            <option value="">Seleccionar vehiculo...</option>
+                            {% for v in vehiculos %}
+                            <option value="{{ v.id }}" data-text="{{ v.placa }} {{ v.marca }} {{ v.modelo }}">{{ v.placa }} - {{ v.marca }} {{ v.modelo }}</option>
+                            {% endfor %}
+                        </select>
+                        <div style="color:#64748b; font-size:0.8rem; margin-top:0.3rem;">Haz clic en un vehiculo de la lista</div>
+                    </div>
+                    <div class="form-group full">
+                        <label>Motivo de ingreso *</label>
+                        <textarea name="motivo" rows="2" required placeholder="Ej: Cambio de aceite, Reparacion de motor, Frenos..."></textarea>
+                    </div>
+                    <div class="form-group full">
+                        <label>Nombre de quien ingresa *</label>
+                        <input type="text" name="nombre_ingresa" required placeholder="Nombre completo">
+                    </div>
+                    <div class="form-group full">
+                        <label>Telefono de contacto</label>
+                        <input type="text" name="telefono" placeholder="0991234567">
+                    </div>
+                    <div class="form-group full">
+                        <label>Novedad</label>
+                        <textarea name="novedad" rows="2" placeholder="Observaciones, detalles, novedades..."></textarea>
+                    </div>
+                    <div class="form-group full">
+                        <label>Observaciones internas</label>
+                        <textarea name="observaciones" rows="2" placeholder="Detalles adicionales..."></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Registrar Ingreso</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Salida del Taller -->
+    <div class="modal-overlay" id="modal-salida">
+        <div class="modal" style="max-width:700px;">
+            <h2>Salida del Taller - <span id="salida-placa"></span></h2>
+            <p style="color:#94a3b8; margin-bottom:1.2rem;">Llene los datos del trabajo realizado. Se registrará automáticamente en el mantenimiento del vehículo.</p>
+            <form id="form-salida" method="POST" action="">
+                <div class="form-grid">
+                    <div class="form-group"><label>Tipo de Mantenimiento *</label>
+                        <select name="tipo_mantenimiento">
+                            <option value="Correctivo">Correctivo</option>
+                            <option value="Preventivo">Preventivo</option>
+                            <option value="Predictivo">Predictivo</option>
+                            <option value="Cambio de Aceite">Cambio de Aceite</option>
+                            <option value="Frenos">Frenos</option>
+                            <option value="Neumaticos">Neumaticos</option>
+                            <option value="Electrico">Electrico</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Descripcion del trabajo</label><input type="text" name="descripcion_mant" placeholder="Detalle del mantenimiento"></div>
+                    <div class="form-group"><label>Costo Mano de Obra ($)</label><input type="number" name="costo_mo" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Costo Lubricantes ($)</label><input type="number" name="costo_lub" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Costo Repuestos ($)</label><input type="number" name="costo_rep" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Total ($)</label><input type="text" id="salida-total" value="0.00" disabled style="font-weight:700; color:#22c55e;"></div>
+                </div>
+
+                <div style="margin-top:1.5rem; border-top:1px solid #334155; padding-top:1rem;">
+                    <h3 style="color:#f59e0b; margin-bottom:0.8rem; font-size:1rem;">Piezas / Repuestos cambiados</h3>
+                    <div id="lista-piezas-salida"></div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="agregarPiezaSalida()" style="margin-top:0.5rem;">+ Agregar pieza</button>
+                </div>
+
+                <div class="form-actions" style="margin-top:2rem;">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar Salida</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer>
+        <div style="padding-left:2rem;">Creado por Poli. Loor Cevallos Willian Albiery</div>
+        <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
+    </footer>
+
+    <script>
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        });
+
+        let contadorPiezas = 0;
+        function abrirSalida(id, placa) {
+            document.getElementById('form-salida').action = '/parte-taller/salir/' + id;
+            document.getElementById('salida-placa').textContent = placa;
+            document.getElementById('modal-salida').classList.add('active');
+            contadorPiezas = 0;
+            document.getElementById('lista-piezas-salida').innerHTML = '';
+            agregarPiezaSalida();
+        }
+        function agregarPiezaSalida() {
+            const i = contadorPiezas;
+            contadorPiezas++;
+            const div = document.createElement('div');
+            div.className = 'pieza-salida';
+            div.id = 'pieza-' + i;
+            div.innerHTML = `
+                <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; border-bottom:1px solid #1e293b; padding-bottom:0.5rem;">
+                    <input type="text" name="pieza_${i}" placeholder="Nombre de la pieza (Ej: Bateria)" style="flex:2; min-width:140px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <select name="pieza_tipo_${i}" style="flex:0 0 110px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                        <option value="repuesto">Repuesto</option>
+                        <option value="mano_obra">Mano Obra</option>
+                        <option value="lubricante">Lubricante</option>
+                    </select>
+                    <input type="number" name="pieza_vida_km_${i}" placeholder="Vida km" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <input type="number" name="pieza_vida_meses_${i}" placeholder="Vida meses" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <input type="number" name="pieza_costo_${i}" placeholder="Costo $" step="0.01" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" oninput="calcSalida(${i})">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.parentElement.remove(); calcSalida();">X</button>
+                </div>`;
+            document.getElementById('lista-piezas-salida').appendChild(div);
+        }
+        function calcSalida() {
+            const mo = parseFloat(document.querySelector('#form-salida input[name=costo_mo]').value) || 0;
+            const lub = parseFloat(document.querySelector('#form-salida input[name=costo_lub]').value) || 0;
+            const rep = parseFloat(document.querySelector('#form-salida input[name=costo_rep]').value) || 0;
+            document.getElementById('salida-total').value = (mo + lub + rep).toFixed(2);
+        }
+
+        const buscarInput = document.getElementById('buscar-vehiculo');
+        const selectVehiculo = document.getElementById('select-vehiculo');
+        const todasOpciones = Array.from(selectVehiculo.options).slice(1);
+
+        buscarInput.addEventListener('input', function() {
+            const texto = this.value.toLowerCase().trim();
+            selectVehiculo.innerHTML = '';
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = 'Seleccionar vehiculo...';
+            selectVehiculo.appendChild(defaultOpt);
+            if (!texto) {
+                todasOpciones.forEach(opt => selectVehiculo.appendChild(opt));
+                return;
+            }
+            const filtrados = todasOpciones.filter(opt => opt.dataset.text.toLowerCase().includes(texto));
+            filtrados.forEach(opt => selectVehiculo.appendChild(opt));
+        });
+    </script>
+</body>
+</html>

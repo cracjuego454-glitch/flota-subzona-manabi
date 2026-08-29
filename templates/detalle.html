@@ -55,6 +55,18 @@
         tr { background: #1e293b; transition: background 0.2s; }
         tr:hover { background: #334155; }
         .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .vehicle-grid { grid-template-columns: 1fr; }
+            .vehicle-header h2 { font-size: 1.3rem; }
+            .form-grid { grid-template-columns: 1fr; }
+            .modal { padding: 1.5rem; width: 95%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
     </style>
 </head>
 <body>
@@ -63,6 +75,9 @@
         <div>
             <span style="color:#64748b; font-size:0.85rem; margin-right:1rem;">{{ session.nombre }} ({{ session.rol }})</span>
             <a href="/">Volver al Inicio</a>
+            <a href="/parte-taller">Parte de Taller</a>
+            <a href="/piezas">Piezas</a>
+            <a href="/reportes">Reportes</a>
             {% if session.rol == 'admin' %}
             <a href="/usuarios">Usuarios</a>
             {% endif %}
@@ -71,6 +86,15 @@
     </nav>
 
     <div class="container">
+        {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% if mensajes %}
+        <div style="background:#78350f; color:#fde68a; border:1px solid #f59e0b; border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
+            {% for cat, msg in mensajes %}
+            <div>{{ msg }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
         <div class="vehicle-header">
             <h2>{{ vehiculo.placa }}
                 {% if vehiculo.estado == 'Activo' %}
@@ -86,7 +110,7 @@
             <div class="vehicle-grid">
                 <div class="vehicle-field"><div class="label">Marca</div><div class="value">{{ vehiculo.marca or '-' }}</div></div>
                 <div class="vehicle-field"><div class="label">Modelo</div><div class="value">{{ vehiculo.modelo or '-' }}</div></div>
-                <div class="vehicle-field"><div class="label">Anio</div><div class="value">{{ vehiculo.anio or '-' }}</div></div>
+                <div class="vehicle-field"><div class="label">Año</div><div class="value">{{ vehiculo.anio or '-' }}</div></div>
                 <div class="vehicle-field"><div class="label">Chasis</div><div class="value">{{ vehiculo.chasis or '-' }}</div></div>
                 <div class="vehicle-field"><div class="label">Motor</div><div class="value">{{ vehiculo.motor or '-' }}</div></div>
                 <div class="vehicle-field"><div class="label">Kilometraje</div><div class="value">{{ "{:,}".format(vehiculo.kilometraje) }} km</div></div>
@@ -108,7 +132,10 @@
                         <th>Tipo</th>
                         <th>Descripcion</th>
                         <th>Kilometraje</th>
-                        <th>Costo</th>
+                        <th>M. Obra</th>
+                        <th>Lubric.</th>
+                        <th>Repuesto</th>
+                        <th>Total</th>
                         <th>Taller</th>
                         <th>Acciones</th>
                     </tr>
@@ -120,7 +147,10 @@
                         <td>{{ m.tipo }}</td>
                         <td>{{ m.descripcion }}</td>
                         <td>{{ "{:,}".format(m.kilometraje) }} km</td>
-                        <td>${{ "{:,.2f}".format(m.costo) }}</td>
+                        <td>${{ "{:,.2f}".format(m.costo_mo or 0) }}</td>
+                        <td>${{ "{:,.2f}".format(m.costo_lub or 0) }}</td>
+                        <td>${{ "{:,.2f}".format(m.costo_rep or 0) }}</td>
+                        <td><strong>${{ "{:,.2f}".format(m.costo) }}</strong></td>
                         <td>{{ m.taller or '-' }}</td>
                         <td class="acciones">
                             {% if session.rol == 'admin' %}
@@ -131,7 +161,62 @@
                     </tr>
                     {% endfor %}
                     {% if not historial %}
-                    <tr><td colspan="7" style="text-align:center; padding:2rem; color:#64748b;">Sin registros de mantenimiento</td></tr>
+                    <tr><td colspan="10" style="text-align:center; padding:2rem; color:#64748b;">Sin registros de mantenimiento</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h3>Piezas de este Vehiculo (Control de Vida Util)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Pieza</th>
+                        <th>Tipo</th>
+                        <th>Fecha ingreso</th>
+                        <th>Km ingreso</th>
+                        <th>Km recorridos</th>
+                        <th>Vida km</th>
+                        <th>Km faltan</th>
+                        <th>Vida meses</th>
+                        <th>Faltan meses</th>
+                        <th>Costo</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in piezas_veh %}
+                    <tr>
+                        <td><strong>{{ p.nombre }}</strong>{% if p.observaciones %}<div style="color:#f59e0b; font-size:0.78rem; margin-top:0.2rem;">Excepcion: {{ p.observaciones }}</div>{% endif %}</td>
+                        <td>{{ 'Repuesto' if p.tipo=='repuesto' else 'Mano de Obra' if p.tipo=='mano_obra' else 'Lubricante' }}</td>
+                        <td>{{ p.fecha_ingreso or '-' }}</td>
+                        <td>{{ "{:,}".format(p.km_ingreso) if p.km_ingreso else '-' }}</td>
+                        <td>{{ "{:,}".format(p.km_recorridos) }}</td>
+                        <td>{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
+                        <td>{% if p.vida_km %}{{ "{:,}".format(p.km_faltan) }}{% else %}-{% endif %}</td>
+                        <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
+                        <td>{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
+                        <td>${{ "{:,.2f}".format(p.costo or 0) }}</td>
+                        <td>
+                            {% if p.estado == 'Vencida' %}
+                                <span class="badge badge-activo" style="background:#7f1d1d; color:#ef4444;">Vencida</span>
+                            {% elif p.estado == 'Por vencer' %}
+                                <span class="badge badge-taller">Por Vencer</span>
+                            {% else %}
+                                <span class="badge badge-activo">En Vida Util</span>
+                            {% endif %}
+                        </td>
+                        <td class="acciones">
+                            {% if session.rol == 'admin' %}
+                            <a href="/piezas-vehiculo/eliminar/{{ p.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza del vehiculo?')">X</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not piezas_veh %}
+                    <tr><td colspan="12" style="text-align:center; padding:2rem; color:#64748b;">Sin piezas registradas para este vehiculo. Agregalas al registrar un mantenimiento.</td></tr>
                     {% endif %}
                 </tbody>
             </table>
@@ -159,9 +244,19 @@
                     </div>
                     <div class="form-group full"><label>Descripcion</label><textarea name="descripcion" rows="3"></textarea></div>
                     <div class="form-group"><label>Kilometraje Actual</label><input type="number" name="kilometraje" value="{{ vehiculo.kilometraje }}"></div>
-                    <div class="form-group"><label>Costo ($)</label><input type="number" name="costo" step="0.01" value="0"></div>
-                    <div class="form-group full"><label>Taller / Mecanico</label><input type="text" name="taller"></div>
+                    <div class="form-group"><label>Taller / Mecanico</label><input type="text" name="taller"></div>
+                    <div class="form-group"><label>Costo Mano de Obra ($)</label><input type="number" name="costo_mo" step="0.01" value="0" oninput="calcTotalMant()"></div>
+                    <div class="form-group"><label>Costo Lubricantes ($)</label><input type="number" name="costo_lub" step="0.01" value="0" oninput="calcTotalMant()"></div>
+                    <div class="form-group"><label>Costo Repuestos ($)</label><input type="number" name="costo_rep" step="0.01" value="0" oninput="calcTotalMant()"></div>
+                    <div class="form-group"><label>Total ($)</label><input type="text" id="mant-total" value="0.00" disabled style="font-weight:700; color:#22c55e;"></div>
                 </div>
+
+                <div style="margin-top:1.5rem; border-top:1px solid #334155; padding-top:1rem;">
+                    <h3 style="color:#f59e0b; margin-bottom:0.8rem; font-size:1rem;">Piezas / Items instalados (opcional)</h3>
+                    <div id="lista-piezas-mant"></div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="agregarPiezaMant()" style="margin-top:0.5rem;">+ Elegir pieza del catalogo</button>
+                </div>
+
                 <div class="form-actions">
                     <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
                     <button type="submit" class="btn btn-success">Guardar</button>
@@ -169,6 +264,12 @@
             </form>
         </div>
     </div>
+
+    <select id="catalogo-piezas" style="display:none;">
+        {% for pz in catalogo %}
+        <option value="{{ pz.id }}">{{ pz.nombre }} ({{ 'Repuesto' if pz.tipo=='repuesto' else 'Mano de Obra' if pz.tipo=='mano_obra' else 'Lubricante' }})</option>
+        {% endfor %}
+    </select>
 
     <!-- Modal Editar Mantenimiento -->
     <div class="modal-overlay" id="modal-editar-mant">
@@ -191,8 +292,11 @@
                     </div>
                     <div class="form-group full"><label>Descripcion</label><textarea name="descripcion" id="em-descripcion" rows="3"></textarea></div>
                     <div class="form-group"><label>Kilometraje Actual</label><input type="number" name="kilometraje" id="em-km"></div>
-                    <div class="form-group"><label>Costo ($)</label><input type="number" name="costo" id="em-costo" step="0.01"></div>
-                    <div class="form-group full"><label>Taller / Mecanico</label><input type="text" name="taller" id="em-taller"></div>
+                    <div class="form-group"><label>Taller / Mecanico</label><input type="text" name="taller" id="em-taller"></div>
+                    <div class="form-group"><label>Costo Mano de Obra ($)</label><input type="number" name="costo_mo" id="em-mo" step="0.01" value="0" oninput="calcTotalEditMant()"></div>
+                    <div class="form-group"><label>Costo Lubricantes ($)</label><input type="number" name="costo_lub" id="em-lub" step="0.01" value="0" oninput="calcTotalEditMant()"></div>
+                    <div class="form-group"><label>Costo Repuestos ($)</label><input type="number" name="costo_rep" id="em-rep" step="0.01" value="0" oninput="calcTotalEditMant()"></div>
+                    <div class="form-group"><label>Total ($)</label><input type="text" id="em-total" value="0.00" disabled style="font-weight:700; color:#22c55e;"></div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
@@ -208,13 +312,28 @@
     </footer>
 
     <script>
+        function calcTotalMant() {
+            var mo = parseFloat(document.querySelector('#modal-mant input[name=costo_mo]').value) || 0;
+            var lub = parseFloat(document.querySelector('#modal-mant input[name=costo_lub]').value) || 0;
+            var rep = parseFloat(document.querySelector('#modal-mant input[name=costo_rep]').value) || 0;
+            document.getElementById('mant-total').value = (mo + lub + rep).toFixed(2);
+        }
+        function calcTotalEditMant() {
+            var mo = parseFloat(document.getElementById('em-mo').value) || 0;
+            var lub = parseFloat(document.getElementById('em-lub').value) || 0;
+            var rep = parseFloat(document.getElementById('em-rep').value) || 0;
+            document.getElementById('em-total').value = (mo + lub + rep).toFixed(2);
+        }
         function editarMant(m) {
             document.getElementById('form-editar-mant').action = '/mantenimiento/editar/' + m.id;
             document.getElementById('em-fecha').value = m.fecha || '';
             document.getElementById('em-tipo').value = m.tipo || 'Preventivo';
             document.getElementById('em-descripcion').value = m.descripcion || '';
             document.getElementById('em-km').value = m.kilometraje || 0;
-            document.getElementById('em-costo').value = m.costo || 0;
+            document.getElementById('em-mo').value = m.costo_mo || 0;
+            document.getElementById('em-lub').value = m.costo_lub || 0;
+            document.getElementById('em-rep').value = m.costo_rep || 0;
+            document.getElementById('em-total').value = ((parseFloat(m.costo_mo)||0)+(parseFloat(m.costo_lub)||0)+(parseFloat(m.costo_rep)||0)).toFixed(2);
             document.getElementById('em-taller').value = m.taller || '';
             document.getElementById('modal-editar-mant').classList.add('active');
         }
@@ -222,6 +341,50 @@
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
         });
+
+        let contadorPiezasMant = 0;
+        const piezasActivas = [
+            {% for p in piezas_veh if p.pieza_id and p.estado != 'Vencida' %}
+            "{{ p.pieza_id }}",
+            {% endfor %}
+        ];
+        function agregarPiezaMant() {
+            const i = contadorPiezasMant;
+            contadorPiezasMant++;
+            const div = document.createElement('div');
+            div.id = 'mpieza-' + i;
+            div.style.cssText = 'display:flex; gap:0.5rem; align-items:center; margin-bottom:0.8rem; flex-wrap:wrap; border:1px solid #334155; border-radius:8px; padding:0.6rem;';
+            div.innerHTML = `
+                <div style="flex:1; min-width:150px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Pieza del catalogo</label>
+                    <select name="pv_pieza_${i}" onchange="piezaSeleccionada(${i}, this.value)" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                        <option value="">Seleccionar pieza...</option>
+                        ${document.getElementById('catalogo-piezas').innerHTML}
+                    </select>
+                </div>
+                <div style="flex:0 0 90px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Km ingreso</label>
+                    <input type="number" name="pv_km_${i}" placeholder="Km" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=kilometraje]').value || 0}">
+                </div>
+                <div style="flex:0 0 140px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Fecha ingreso</label>
+                    <input type="date" name="pv_fecha_${i}" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=fecha]').value || ''}">
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="this.parentElement.remove()">X</button>
+                <div id="proma-${i}" style="flex-basis:100%; display:none; background:#7f1d1d; color:#fecaca; border-radius:6px; padding:0.6rem; font-size:0.85rem;">
+                    <strong>EXCEPCION:</strong> Esta pieza aun esta en vida util en este vehiculo. Si aun asi deseas cambiarla, escribe el motivo (ej: cambio por dano/golpe) para poder guardar:
+                    <input type="text" name="pv_excepcion_${i}" placeholder="Motivo de la excepcion..." style="width:100%; margin-top:0.4rem; padding:0.5rem; border-radius:6px; border:1px solid #f59e0b; background:#0f172a; color:#e2e8f0;">
+                </div>`;
+            document.getElementById('lista-piezas-mant').appendChild(div);
+        }
+        function piezaSeleccionada(i, val) {
+            const aviso = document.getElementById('proma-' + i);
+            if (val && piezasActivas.includes(val)) {
+                aviso.style.display = 'block';
+            } else {
+                aviso.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
