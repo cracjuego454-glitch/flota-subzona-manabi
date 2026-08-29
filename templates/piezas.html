@@ -88,102 +88,59 @@
     </nav>
 
     <div class="container">
-        <div id="alerta" class="alerta"></div>
-
-        {% set total = piezas|length %}
-        {% set buenas = piezas|selectattr('estado', 'equalto', 'En vida util')|list|length %}
-        {% set porv = piezas|selectattr('estado', 'equalto', 'Por vencer')|list|length %}
-        {% set venc = piezas|selectattr('estado', 'equalto', 'Vencida')|list|length %}
-
-        <div class="stats">
-            <div class="stat-card total"><div class="number">{{ total }}</div><div class="label">Total Piezas</div></div>
-            <div class="stat-card buenas"><div class="number">{{ buenas }}</div><div class="label">En Vida Util</div></div>
-            <div class="stat-card porvencer"><div class="number">{{ porv }}</div><div class="label">Por Vencer</div></div>
-            <div class="stat-card vencidas"><div class="number">{{ venc }}</div><div class="label">Vencidas</div></div>
-        </div>
-
-        <div class="actions">
+        <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap;">
+            <span style="color:#94a3b8;">Catalogo de piezas:</span>
             <a href="/piezas?tipo=repuesto" class="btn {% if tipo == 'repuesto' %}btn-active{% else %}btn-primary{% endif %}">Repuestos</a>
             <a href="/piezas?tipo=mano_obra" class="btn {% if tipo == 'mano_obra' %}btn-active{% else %}btn-primary{% endif %}">Mano de Obra</a>
             <a href="/piezas?tipo=lubricante" class="btn {% if tipo == 'lubricante' %}btn-active{% else %}btn-primary{% endif %}">Lubricantes</a>
-            <span style="color:#475569;">|</span>
-            <a href="/piezas?tipo={{ tipo }}&filtro=todas" class="btn {% if filtro == 'todas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Todas</a>
-            <a href="/piezas?tipo={{ tipo }}&filtro=vencidas" class="btn {% if filtro == 'vencidas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Vencidas</a>
-            <a href="/piezas?tipo={{ tipo }}&filtro=proximas" class="btn {% if filtro == 'proximas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Por Vencer</a>
             <div style="flex:1;"></div>
-            <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Registrar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }}</button>
+            <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Agregar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }}</button>
+        </div>
+
+        <div style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:1rem 1.5rem; margin-bottom:1.5rem; color:#94a3b8; font-size:0.9rem;">
+            Aqui se registra el catalogo de piezas (nombre + vida util). Luego, al registrar un mantenimiento en un vehiculo, eliges una pieza de este listado y pones el km y la fecha en que ingreso, para llevar el control de vencimiento en ese vehiculo.
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th>Placa</th>
                     <th>Pieza</th>
-                    <th>Instalado en (km)</th>
-                    <th>Km actual</th>
-                    <th>Km recorridos</th>
+                    <th>Tipo</th>
                     <th>Vida util (km)</th>
-                    <th>Km faltan</th>
                     <th>Vida util (meses)</th>
-                    <th>Faltan meses</th>
                     <th>Costo</th>
-                    <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for p in piezas %}
                 <tr>
-                    <td><strong>{{ p.placa }}</strong></td>
-                    <td>{{ p.nombre }}</td>
-                    <td>{{ "{:,}".format(p.km_instalacion) }}</td>
-                    <td>{{ "{:,}".format(p.km_actual or p.km_instalacion) }}</td>
-                    <td>{{ "{:,}".format(p.km_recorridos) }}</td>
+                    <td><strong>{{ p.nombre }}</strong></td>
+                    <td>{{ 'Repuesto' if p.tipo=='repuesto' else 'Mano de Obra' if p.tipo=='mano_obra' else 'Lubricante' }}</td>
                     <td>{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
-                    <td>{% if p.vida_km %}{{ "{:,}".format(p.km_faltan) }}{% else %}-{% endif %}</td>
                     <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
-                    <td>{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
                     <td>${{ "{:,.2f}".format(p.costo or 0) }}</td>
-                    <td>
-                        {% if p.estado == 'Vencida' %}
-                            <span class="badge badge-vencida" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: FUERA DE RANGO. Pieza vencida, requiere cambio.')">Vencida</span>
-                        {% elif p.estado == 'Por vencer' %}
-                            <span class="badge badge-por" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: Cerca de vencer, planifique el cambio.')">Por Vencer</span>
-                        {% else %}
-                            <span class="badge badge-vida" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: DENTRO DE RANGO. Aun en vida util.')">En Vida Util</span>
-                        {% endif %}
-                    </td>
                     <td class="acciones">
                         {% if session.rol == 'admin' %}
-                        <a href="/piezas/eliminar/{{ p.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza?')">X</a>
+                        <a href="/piezas/eliminar/{{ p.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza del catalogo?')">X</a>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
                 {% if not piezas %}
-                <tr><td colspan="12" style="text-align:center; padding:2rem; color:#64748b;">No hay registros de {{ 'repuestos' if tipo=='repuesto' else 'mano de obra' if tipo=='mano_obra' else 'lubricantes' }}</td></tr>
+                <tr><td colspan="6" style="text-align:center; padding:2rem; color:#64748b;">No hay {{ 'repuestos' if tipo=='repuesto' else 'items de mano de obra' if tipo=='mano_obra' else 'lubricantes' }} en el catalogo</td></tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 
-    <!-- Modal Registrar Pieza -->
+    <!-- Modal Registrar Pieza Catalogo -->
     <div class="modal-overlay" id="modal-pieza">
         <div class="modal">
-            <h2>Registrar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }} / Control de Vida Util</h2>
+            <h2>Agregar al Catalogo</h2>
             <form action="/piezas/agregar" method="POST">
                 <div class="form-grid">
-                    <div class="form-group full">
-                        <label>Vehiculo *</label>
-                        <input type="text" id="buscar-pieza" placeholder="Escriba placa o marca..." autocomplete="off" style="padding:0.6rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.95rem; margin-bottom:0.5rem;">
-                        <select name="vehiculo_id" id="select-pieza-veh" size="4" required style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.9rem;">
-                            <option value="">Seleccionar vehiculo...</option>
-                            {% for v in vehiculos %}
-                            <option value="{{ v.id }}" data-text="{{ v.placa }} {{ v.marca }} {{ v.modelo }}">{{ v.placa }} - {{ v.marca }} {{ v.modelo }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group full"><label>Nombre del {{ 'Repuesto' if tipo=='repuesto' else 'item' }} *</label><input type="text" name="nombre" required placeholder="Ej: Amortiguador delantero, Mano de obra, Aceite..."></div>
+                    <div class="form-group full"><label>Nombre *</label><input type="text" name="nombre" required placeholder="Ej: Bateria, Pastillas de freno, Amortiguador..."></div>
                     <div class="form-group"><label>Tipo *</label>
                         <select name="tipo" required>
                             <option value="repuesto" {% if tipo=='repuesto' %}selected{% endif %}>Repuesto / Pieza</option>
@@ -191,16 +148,13 @@
                             <option value="lubricante" {% if tipo=='lubricante' %}selected{% endif %}>Lubricante</option>
                         </select>
                     </div>
-                    <div class="form-group"><label>Km de instalacion</label><input type="number" name="km_instalacion" value="0"></div>
-                    <div class="form-group"><label>Fecha de instalacion</label><input type="date" name="fecha_instalacion"></div>
                     <div class="form-group"><label>Vida util (km)</label><input type="number" name="vida_km" value="0" placeholder="Ej: 4000"></div>
                     <div class="form-group"><label>Vida util (meses)</label><input type="number" name="vida_meses" value="0" placeholder="Ej: 6"></div>
-                    <div class="form-group"><label>Costo ($)</label><input type="number" name="costo" step="0.01" value="0"></div>
-                    <div class="form-group full"><label>Observaciones</label><textarea name="observaciones" rows="2" placeholder="Detalles..."></textarea></div>
+                    <div class="form-group full"><label>Costo ($)</label><input type="number" name="costo" step="0.01" value="0"></div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Guardar Pieza</button>
+                    <button type="submit" class="btn btn-success">Guardar en Catalogo</button>
                 </div>
             </form>
         </div>
@@ -212,29 +166,8 @@
     </footer>
 
     <script>
-        function mostrarAlerta(msg) {
-            var a = document.getElementById('alerta');
-            a.textContent = msg;
-            a.style.display = 'block';
-            a.scrollIntoView({behavior: 'smooth', block: 'center'});
-            setTimeout(function() { a.style.display = 'none'; }, 4000);
-        }
-
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
-        });
-
-        const bc = document.getElementById('buscar-pieza');
-        const sel = document.getElementById('select-pieza-veh');
-        const opts = Array.from(sel.options).slice(1);
-        bc.addEventListener('input', function() {
-            const t = this.value.toLowerCase().trim();
-            sel.innerHTML = '';
-            const d = document.createElement('option');
-            d.value = ''; d.textContent = 'Seleccionar vehiculo...';
-            sel.appendChild(d);
-            if (!t) { opts.forEach(o => sel.appendChild(o)); return; }
-            opts.filter(o => o.dataset.text.toLowerCase().includes(t)).forEach(o => sel.appendChild(o));
         });
     </script>
 </body>

@@ -53,7 +53,11 @@ Activo, En Taller, Inactivo, Remate
 17. Mantenimientos con 3 costos separados: Mano de Obra, Lubricantes, Repuestos + total automático
 18. Control de Piezas (/piezas): registrar pieza en vehículo con km instalación, fecha, vida útil (km y/o meses); calcula km recorridos, km faltan, meses faltan; estado: En vida útil / Por vencer / Vencida; alerta clickeando el estado
 19. Piezas con TABS por tipo: Repuestos / Mano de Obra / Lubricantes (cada uno con su lista, estadísticas y registro)
-20. Salida de Taller con formulario completo: al marcar "Salida" se abre modal con tipo de mantenimiento, descripción, 3 costos (mano de obra/lubricantes/repuestos) y lista de piezas cambiadas (pieza+tipo+vida km/vida meses+costo); al confirmar se CREA AUTOMÁTICAMENTE el mantenimiento en el historial del vehículo Y las piezas en su ficha, sin tener que llenarlo aparte
+20. Salida de Taller con formulario completo: al marcar "Salida" se abre modal con tipo de mantenimiento, descripción, 3 costos (mano de obra/lubricantes/repuestos) y lista de piezas cambiadas; al confirmar se CREA AUTOMÁTICAMENTE el mantenimiento en el historial del vehículo Y las piezas en su ficha, sin tener que llenarlo aparte
+21. REDISEÑO PIEZAS: /piezas ahora es un CATÁLOGO (inventario) de piezas con nombre + vida útil (km/meses) + tipo (repuesto/mano de obra/lubricante) + costo, SIN vehículo. El control de vencimiento ya NO se ve en piezas.html.
+22. Al registrar un MANTENIMIENTO en un vehículo, hay un selector para ELEGIR una pieza del catálogo + poner el km de ingreso y la fecha. Así el control de esa pieza se lleva en ESE vehículo.
+23. El control de vida útil por VEHÍCULO se muestra en el Detalle del vehículo (tabla "Piezas de este Vehiculo"): fecha ingreso, km ingreso, km recorridos, km faltan, meses faltan, estado (En vida util / Por vencer / Vencida)
+24. ALERTA DE VIDA ÚTIL AL REGISTRAR MANTENIMIENTO: si eliges en el mantenimiento una pieza que ese vehículo YA tiene y AÚN está en vida útil, se muestra un aviso de EXCEPCIÓN. Debes escribir el motivo (ej: cambio por daño/golpe) para poder guardarla; si no, el sistema BLOQUEA el registro. El motivo queda visible en la ficha del vehículo.
 
 --- IMPORTANTE ---
 - Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)
@@ -68,7 +72,7 @@ templates/index.html: Dashboard con stats, tabla vehículos, filtro mecánica
 templates/detalle.html: Detalle vehículo + historial mantenimientos
 templates/reportes.html: Reportes con filtros, estadísticas, tablas
 templates/parte_taller.html: Parte de taller - registro ingreso/salida vehículos
-templates/piezas.html: Control de piezas con vida útil (km/meses), estados y alertas
+templates/piezas.html: Catálogo de piezas (nombre + vida útil + tipo + costo), tabs por tipo
 templates/usuarios.html: Gestión de usuarios (admin)
 requirements.txt: flask, openpyxl, gunicorn, psycopg2-binary
 static/escudo_policia.png: Escudo Policía Nacional del Ecuador

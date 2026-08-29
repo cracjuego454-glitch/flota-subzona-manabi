@@ -6,7 +6,7 @@ import psycopg2.extras
 from functools import wraps
 from io import BytesIO
 from urllib.parse import urlparse
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session, flash, get_flashed_messages
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -111,15 +111,27 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS piezas (
             id SERIAL PRIMARY KEY,
-            vehiculo_id INTEGER NOT NULL,
-            placa TEXT,
             nombre TEXT NOT NULL,
             tipo TEXT DEFAULT 'repuesto',
-            km_instalacion INTEGER DEFAULT 0,
-            fecha_instalacion TEXT,
+            vida_km INTEGER DEFAULT 0,
+            vida_meses INTEGER DEFAULT 0,
+            costo REAL DEFAULT 0
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS piezas_vehiculo (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            placa TEXT,
+            pieza_id INTEGER,
+            nombre TEXT,
+            tipo TEXT DEFAULT 'repuesto',
+            fecha_ingreso TEXT,
+            km_ingreso INTEGER DEFAULT 0,
             vida_km INTEGER DEFAULT 0,
             vida_meses INTEGER DEFAULT 0,
             costo REAL DEFAULT 0,
+            mantenimiento_id INTEGER,
             observaciones TEXT,
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
@@ -171,6 +183,22 @@ def add_columns_parte_taller():
             cur.execute(f"ALTER TABLE piezas ADD COLUMN {col}")
         except Exception:
             pass
+    try:
+        cur.execute("ALTER TABLE piezas_vehiculo ADD COLUMN observaciones TEXT")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE piezas ALTER COLUMN vehiculo_id DROP NOT NULL")
+    except Exception:
+        pass
+    try:
+        cur.execute("""
+            UPDATE piezas SET vehiculo_id = NULL, placa = NULL,
+            km_instalacion = 0, fecha_instalacion = NULL, observaciones = NULL
+            WHERE vehiculo_id IS NOT NULL
+        """)
+    except Exception:
+        pass
     conn.commit()
     cur.close()
     conn.close()
@@ -371,9 +399,38 @@ def detalle(id):
     vehiculo = cur.fetchone()
     cur.execute("SELECT * FROM mantenimientos WHERE vehiculo_id=%s ORDER BY fecha DESC", (id,))
     historial = cur.fetchall()
+    cur.execute("SELECT * FROM piezas ORDER BY nombre ASC")
+    catalogo = cur.fetchall()
+
+    cur.execute("SELECT * FROM piezas_vehiculo WHERE vehiculo_id=%s ORDER BY id DESC", (id,))
+    piezas_veh = cur.fetchall()
+    ahora = datetime.now(ECUADOR_TZ)
+    for p in piezas_veh:
+        km_recorridos = (vehiculo["kilometraje"] or 0) - (p.get("km_ingreso") or 0)
+        km_faltan = (p.get("vida_km") or 0) - km_recorridos
+        p["km_recorridos"] = max(km_recorridos, 0)
+        p["km_faltan"] = km_faltan
+        meses_transcurridos = 9999
+        if p.get("fecha_ingreso"):
+            try:
+                fi = datetime.strptime(str(p["fecha_ingreso"])[:10], "%Y-%m-%d")
+                dias = (ahora - fi.replace(tzinfo=ECUADOR_TZ)).days
+                meses_transcurridos = dias / 30.44
+            except Exception:
+                meses_transcurridos = 0
+        p["meses_faltan"] = round((p.get("vida_meses") or 0) - meses_transcurridos, 1) if meses_transcurridos != 9999 else None
+        vencida = km_faltan <= 0 or (p.get("vida_meses") and p["meses_faltan"] is not None and p["meses_faltan"] <= 0)
+        por_vencer = (0 < km_faltan <= (p.get("vida_km") or 0) * 0.15) or (p["meses_faltan"] is not None and 0 < p["meses_faltan"] <= (p.get("vida_meses") or 0) * 0.15)
+        if vencida:
+            p["estado"] = "Vencida"
+        elif por_vencer:
+            p["estado"] = "Por vencer"
+        else:
+            p["estado"] = "En vida util"
+
     cur.close()
     conn.close()
-    return render_template("detalle.html", vehiculo=vehiculo, historial=historial)
+    return render_template("detalle.html", vehiculo=vehiculo, historial=historial, catalogo=catalogo, piezas_veh=piezas_veh)
 
 
 @app.route("/mantenimiento/<int:vehiculo_id>", methods=["POST"])
@@ -401,6 +458,72 @@ def agregar_mantenimiento(vehiculo_id):
         request.form["taller"]
     ))
     cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
+
+    cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    rp = cur.fetchone()
+    placa = rp[0] if rp else ""
+
+    km_actual_mant = int(request.form.get("kilometraje") or 0)
+
+    cur.execute("SELECT id, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses FROM piezas_vehiculo WHERE vehiculo_id=%s AND pieza_id IS NOT NULL", (vehiculo_id,))
+    existentes = cur.fetchall()
+
+    def pieza_activa(pz):
+        pid, fecha, km_ing, vida_km, vida_meses = pz[1], pz[4], pz[5], pz[6], pz[7]
+        km_rec = km_actual_mant - (km_ing or 0)
+        km_faltan = (vida_km or 0) - km_rec
+        m_faltan = None
+        if fecha:
+            try:
+                dias = (datetime.now(ECUADOR_TZ) - datetime.strptime(str(fecha)[:10], "%Y-%m-%d").replace(tzinfo=ECUADOR_TZ)).days
+                m_faltan = (vida_meses or 0) - dias / 30.44
+            except Exception:
+                pass
+        if km_faltan <= 0:
+            return False
+        if vida_km and km_faltan > 0:
+            if m_faltan is not None and m_faltan <= 0:
+                return False
+            return True
+        if m_faltan is not None and m_faltan <= 0:
+            return False
+        return True
+
+    activos = set()
+    for pz in existentes:
+        if pz[1] and pieza_activa(pz):
+            activos.add(pz[1])
+
+    bloqueados = []
+    i = 0
+    while True:
+        pieza_id = request.form.get(f"pv_pieza_{i}")
+        if pieza_id is None:
+            break
+        pieza_id = pieza_id.strip()
+        if pieza_id:
+            cur.execute("SELECT nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pieza_id,))
+            cat = cur.fetchone()
+            if cat:
+                except_razon = (request.form.get(f"pv_excepcion_{i}") or "").strip()
+                if pieza_id in activos and not except_razon:
+                    bloqueados.append(cat[1])
+                else:
+                    km_ing = int(request.form.get(f"pv_km_{i}") or km_actual_mant or 0)
+                    fech_ing = request.form.get(f"pv_fecha_{i}") or request.form.get("fecha") or fecha_local()
+                    cur.execute("""
+                        INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id, observaciones)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (vehiculo_id, placa, cat[0], cat[1], cat[2], fech_ing, km_ing, cat[3], cat[4], cat[5], None, except_razon or None))
+        i += 1
+
+    if bloqueados:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        flash("ALERTA: La pieza '" + ", ".join(bloqueados) + "' aun esta en vida util en este vehiculo. Marca la opcion EXCEPCION y escribe el motivo (ej: cambio por dano/golpe) para poder registrarla.", "warning")
+        return redirect(url_for("detalle", id=vehiculo_id))
+
     conn.commit()
     cur.close()
     conn.close()
@@ -943,9 +1066,9 @@ def parte_taller_salir(id):
                 vida_meses = int(request.form.get(f"pieza_vida_meses_{i}") or 0)
                 costo_p = float(request.form.get(f"pieza_costo_{i}") or 0)
                 cur.execute("""
-                    INSERT INTO piezas (vehiculo_id, placa, nombre, tipo, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (reg["vehiculo_id"], reg["placa"], nombre, tipo_p, km_instal, fecha_str, vida_km, vida_meses, costo_p))
+                    INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id)
+                    VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, NULL)
+                """, (reg["vehiculo_id"], reg["placa"], nombre, tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p))
                 piezas_nombres.append(nombre)
             i += 1
 
@@ -979,54 +1102,16 @@ def parte_taller_eliminar(id):
 def piezas():
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    filtro = request.args.get("filtro", "todas")
     tipo = request.args.get("tipo", "repuesto")
     cur.execute("""
-        SELECT p.*, v.marca, v.modelo, v.kilometraje AS km_actual
-        FROM piezas p
-        LEFT JOIN vehiculos v ON p.vehiculo_id = v.id
-        WHERE p.tipo = %s
-        ORDER BY p.id DESC
+        SELECT * FROM piezas
+        WHERE tipo = %s
+        ORDER BY nombre ASC
     """, (tipo,))
     piezas = cur.fetchall()
-    ahora = datetime.now(ECUADOR_TZ)
-    for p in piezas:
-        km_actual = p.get("km_actual") or p.get("km_instalacion") or 0
-        km_recorridos = km_actual - (p.get("km_instalacion") or 0)
-        km_faltan = (p.get("vida_km") or 0) - km_recorridos
-        p["km_recorridos"] = max(km_recorridos, 0)
-        p["km_faltan"] = km_faltan
-
-        meses_transcurridos = 9999
-        if p.get("fecha_instalacion"):
-            try:
-                fi = datetime.strptime(str(p["fecha_instalacion"])[:10], "%Y-%m-%d")
-                dias = (ahora - fi.replace(tzinfo=ECUADOR_TZ)).days
-                meses_transcurridos = dias / 30.44
-            except Exception:
-                meses_transcurridos = 0
-        p["meses_transcurridos"] = None if meses_transcurridos == 9999 else round(meses_transcurridos, 1)
-        p["meses_faltan"] = round((p.get("vida_meses") or 0) - meses_transcurridos, 1) if meses_transcurridos != 9999 else None
-
-        vencida = km_faltan <= 0 or (p.get("vida_meses") and p["meses_faltan"] is not None and p["meses_faltan"] <= 0)
-        por_vencer = (0 < km_faltan <= (p.get("vida_km") or 0) * 0.15) or (p["meses_faltan"] is not None and 0 < p["meses_faltan"] <= (p.get("vida_meses") or 0) * 0.15)
-        if vencida:
-            p["estado"] = "Vencida"
-        elif por_vencer:
-            p["estado"] = "Por vencer"
-        else:
-            p["estado"] = "En vida util"
-
-    if filtro == "vencidas":
-        piezas = [p for p in piezas if p["estado"] == "Vencida"]
-    elif filtro == "proximas":
-        piezas = [p for p in piezas if p["estado"] == "Por vencer"]
-
-    cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
-    vehiculos = cur.fetchall()
     cur.close()
     conn.close()
-    return render_template("piezas.html", piezas=piezas, vehiculos=vehiculos, filtro=filtro, tipo=tipo)
+    return render_template("piezas.html", piezas=piezas, tipo=tipo)
 
 
 @app.route("/piezas/agregar", methods=["POST"])
@@ -1034,27 +1119,20 @@ def piezas():
 def piezas_agregar():
     conn = get_db()
     cur = conn.cursor()
-    vehiculo_id = request.form["vehiculo_id"]
-    cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
-    v = cur.fetchone()
-    placa = v[0] if v else ""
     cur.execute("""
-        INSERT INTO piezas (vehiculo_id, placa, nombre, tipo, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo, observaciones)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO piezas (nombre, tipo, vida_km, vida_meses, costo)
+        VALUES (%s, %s, %s, %s, %s)
     """, (
-        vehiculo_id, placa, request.form["nombre"],
+        request.form["nombre"],
         request.form.get("tipo", "repuesto"),
-        request.form.get("km_instalacion") or 0,
-        request.form.get("fecha_instalacion") or fecha_local(),
         request.form.get("vida_km") or 0,
         request.form.get("vida_meses") or 0,
-        request.form.get("costo") or 0,
-        request.form.get("observaciones", "")
+        request.form.get("costo") or 0
     ))
     conn.commit()
     cur.close()
     conn.close()
-    return redirect(url_for("piezas"))
+    return redirect(url_for("piezas", tipo=request.form.get("tipo", "repuesto")))
 
 
 @app.route("/piezas/eliminar/<int:id>")
@@ -1062,11 +1140,29 @@ def piezas_agregar():
 def piezas_eliminar(id):
     conn = get_db()
     cur = conn.cursor()
+    cur.execute("SELECT tipo FROM piezas WHERE id=%s", (id,))
+    r = cur.fetchone()
     cur.execute("DELETE FROM piezas WHERE id=%s", (id,))
     conn.commit()
     cur.close()
     conn.close()
-    return redirect(url_for("piezas"))
+    tipo = r[0] if r else "repuesto"
+    return redirect(url_for("piezas", tipo=tipo))
+
+
+@app.route("/piezas-vehiculo/eliminar/<int:id>")
+@admin_required
+def pieza_vehiculo_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT vehiculo_id FROM piezas_vehiculo WHERE id=%s", (id,))
+    r = cur.fetchone()
+    cur.execute("DELETE FROM piezas_vehiculo WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    vid = r[0] if r else 0
+    return redirect(url_for("detalle", id=vid))
 
 
 @app.route("/reportes")
