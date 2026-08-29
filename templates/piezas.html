@@ -103,11 +103,15 @@
         </div>
 
         <div class="actions">
-            <a href="/piezas?filtro=todas" class="btn {% if filtro == 'todas' %}btn-active{% else %}btn-primary{% endif %}">Todas</a>
-            <a href="/piezas?filtro=vencidas" class="btn {% if filtro == 'vencidas' %}btn-active{% else %}btn-primary{% endif %}">Vencidas</a>
-            <a href="/piezas?filtro=proximas" class="btn {% if filtro == 'proximas' %}btn-active{% else %}btn-primary{% endif %}">Por Vencer</a>
+            <a href="/piezas?tipo=repuesto" class="btn {% if tipo == 'repuesto' %}btn-active{% else %}btn-primary{% endif %}">Repuestos</a>
+            <a href="/piezas?tipo=mano_obra" class="btn {% if tipo == 'mano_obra' %}btn-active{% else %}btn-primary{% endif %}">Mano de Obra</a>
+            <a href="/piezas?tipo=lubricante" class="btn {% if tipo == 'lubricante' %}btn-active{% else %}btn-primary{% endif %}">Lubricantes</a>
+            <span style="color:#475569;">|</span>
+            <a href="/piezas?tipo={{ tipo }}&filtro=todas" class="btn {% if filtro == 'todas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Todas</a>
+            <a href="/piezas?tipo={{ tipo }}&filtro=vencidas" class="btn {% if filtro == 'vencidas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Vencidas</a>
+            <a href="/piezas?tipo={{ tipo }}&filtro=proximas" class="btn {% if filtro == 'proximas' %}btn-active{% else %}btn-primary{% endif %} btn-sm">Por Vencer</a>
             <div style="flex:1;"></div>
-            <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Registrar Pieza</button>
+            <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Registrar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }}</button>
         </div>
 
         <table>
@@ -122,6 +126,7 @@
                     <th>Km faltan</th>
                     <th>Vida util (meses)</th>
                     <th>Faltan meses</th>
+                    <th>Costo</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
@@ -138,6 +143,7 @@
                     <td>{% if p.vida_km %}{{ "{:,}".format(p.km_faltan) }}{% else %}-{% endif %}</td>
                     <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
                     <td>{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
+                    <td>${{ "{:,.2f}".format(p.costo or 0) }}</td>
                     <td>
                         {% if p.estado == 'Vencida' %}
                             <span class="badge badge-vencida" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: FUERA DE RANGO. Pieza vencida, requiere cambio.')">Vencida</span>
@@ -155,7 +161,7 @@
                 </tr>
                 {% endfor %}
                 {% if not piezas %}
-                <tr><td colspan="11" style="text-align:center; padding:2rem; color:#64748b;">No hay piezas registradas</td></tr>
+                <tr><td colspan="12" style="text-align:center; padding:2rem; color:#64748b;">No hay registros de {{ 'repuestos' if tipo=='repuesto' else 'mano de obra' if tipo=='mano_obra' else 'lubricantes' }}</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -164,7 +170,7 @@
     <!-- Modal Registrar Pieza -->
     <div class="modal-overlay" id="modal-pieza">
         <div class="modal">
-            <h2>Registrar Pieza / Control de Vida Util</h2>
+            <h2>Registrar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }} / Control de Vida Util</h2>
             <form action="/piezas/agregar" method="POST">
                 <div class="form-grid">
                     <div class="form-group full">
@@ -177,7 +183,14 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group full"><label>Nombre de la pieza *</label><input type="text" name="nombre" required placeholder="Ej: Amortiguador delantero, Banda, Pastillas de freno..."></div>
+                    <div class="form-group full"><label>Nombre del {{ 'Repuesto' if tipo=='repuesto' else 'item' }} *</label><input type="text" name="nombre" required placeholder="Ej: Amortiguador delantero, Mano de obra, Aceite..."></div>
+                    <div class="form-group"><label>Tipo *</label>
+                        <select name="tipo" required>
+                            <option value="repuesto" {% if tipo=='repuesto' %}selected{% endif %}>Repuesto / Pieza</option>
+                            <option value="mano_obra" {% if tipo=='mano_obra' %}selected{% endif %}>Mano de Obra</option>
+                            <option value="lubricante" {% if tipo=='lubricante' %}selected{% endif %}>Lubricante</option>
+                        </select>
+                    </div>
                     <div class="form-group"><label>Km de instalacion</label><input type="number" name="km_instalacion" value="0"></div>
                     <div class="form-group"><label>Fecha de instalacion</label><input type="date" name="fecha_instalacion"></div>
                     <div class="form-group"><label>Vida util (km)</label><input type="number" name="vida_km" value="0" placeholder="Ej: 4000"></div>

@@ -52,6 +52,8 @@ Activo, En Taller, Inactivo, Remate
 16. Botón borrar registros del Parte de Taller (solo admin)
 17. Mantenimientos con 3 costos separados: Mano de Obra, Lubricantes, Repuestos + total automático
 18. Control de Piezas (/piezas): registrar pieza en vehículo con km instalación, fecha, vida útil (km y/o meses); calcula km recorridos, km faltan, meses faltan; estado: En vida útil / Por vencer / Vencida; alerta clickeando el estado
+19. Piezas con TABS por tipo: Repuestos / Mano de Obra / Lubricantes (cada uno con su lista, estadísticas y registro)
+20. Salida de Taller con formulario completo: al marcar "Salida" se abre modal con tipo de mantenimiento, descripción, 3 costos (mano de obra/lubricantes/repuestos) y lista de piezas cambiadas (pieza+tipo+vida km/vida meses+costo); al confirmar se CREA AUTOMÁTICAMENTE el mantenimiento en el historial del vehículo Y las piezas en su ficha, sin tener que llenarlo aparte
 
 --- IMPORTANTE ---
 - Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)

@@ -114,6 +114,7 @@ def init_db():
             vehiculo_id INTEGER NOT NULL,
             placa TEXT,
             nombre TEXT NOT NULL,
+            tipo TEXT DEFAULT 'repuesto',
             km_instalacion INTEGER DEFAULT 0,
             fecha_instalacion TEXT,
             vida_km INTEGER DEFAULT 0,
@@ -163,6 +164,11 @@ def add_columns_parte_taller():
     for col in ['costo_mo REAL DEFAULT 0', 'costo_lub REAL DEFAULT 0', 'costo_rep REAL DEFAULT 0']:
         try:
             cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN {col}")
+        except Exception:
+            pass
+    for col in ['tipo TEXT DEFAULT \'repuesto\'']:
+        try:
+            cur.execute(f"ALTER TABLE piezas ADD COLUMN {col}")
         except Exception:
             pass
     conn.commit()
@@ -896,11 +902,55 @@ def parte_taller_ingresar():
 def parte_taller_salir(id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT vehiculo_id FROM parte_taller WHERE id=%s AND fecha_salida IS NULL", (id,))
+    cur.execute("SELECT * FROM parte_taller WHERE id=%s AND fecha_salida IS NULL", (id,))
     reg = cur.fetchone()
     if reg:
+        fi = reg["fecha_ingreso"]
+        if hasattr(fi, 'strftime'):
+            fecha_str = fi.strftime("%Y-%m-%d")
+        else:
+            fecha_str = str(fi)[:10]
+
+        costo_mo = float(request.form.get("costo_mo") or 0)
+        costo_lub = float(request.form.get("costo_lub") or 0)
+        costo_rep = float(request.form.get("costo_rep") or 0)
+        costo_total = costo_mo + costo_lub + costo_rep
+
+        cur.execute("SELECT kilometraje FROM vehiculos WHERE id=%s", (reg["vehiculo_id"],))
+        v = cur.fetchone()
+        km_actual = (v["kilometraje"] or 0) if v else 0
+
+        tipo_mant = request.form.get("tipo_mantenimiento", "Correctivo")
+        descripcion = (reg["motivo"] or "") + (" | " + request.form.get("descripcion_mant", "") if request.form.get("descripcion_mant") else "")
+
+        cur.execute("""
+            INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (reg["vehiculo_id"], fecha_str, tipo_mant, descripcion, km_actual, costo_total, costo_mo, costo_lub, costo_rep, reg["mecanica"]))
+
+        km_instal = km_actual
+        holgura = 0
+        piezas_nombres = []
+        i = 0
+        while True:
+            nombre = request.form.get(f"pieza_{i}")
+            if nombre is None:
+                break
+            nombre = nombre.strip()
+            if nombre:
+                tipo_p = request.form.get(f"pieza_tipo_{i}", "repuesto")
+                vida_km = int(request.form.get(f"pieza_vida_km_{i}") or 0)
+                vida_meses = int(request.form.get(f"pieza_vida_meses_{i}") or 0)
+                costo_p = float(request.form.get(f"pieza_costo_{i}") or 0)
+                cur.execute("""
+                    INSERT INTO piezas (vehiculo_id, placa, nombre, tipo, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (reg["vehiculo_id"], reg["placa"], nombre, tipo_p, km_instal, fecha_str, vida_km, vida_meses, costo_p))
+                piezas_nombres.append(nombre)
+            i += 1
+
         cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))
-        cur.execute("UPDATE vehiculos SET estado='Activo' WHERE id=%s", (reg["vehiculo_id"],))
+        cur.execute("UPDATE vehiculos SET estado='Activo', kilometraje=%s WHERE id=%s", (km_actual, reg["vehiculo_id"]))
         conn.commit()
     cur.close()
     conn.close()
@@ -930,12 +980,14 @@ def piezas():
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     filtro = request.args.get("filtro", "todas")
+    tipo = request.args.get("tipo", "repuesto")
     cur.execute("""
         SELECT p.*, v.marca, v.modelo, v.kilometraje AS km_actual
         FROM piezas p
         LEFT JOIN vehiculos v ON p.vehiculo_id = v.id
+        WHERE p.tipo = %s
         ORDER BY p.id DESC
-    """)
+    """, (tipo,))
     piezas = cur.fetchall()
     ahora = datetime.now(ECUADOR_TZ)
     for p in piezas:
@@ -974,7 +1026,7 @@ def piezas():
     vehiculos = cur.fetchall()
     cur.close()
     conn.close()
-    return render_template("piezas.html", piezas=piezas, vehiculos=vehiculos, filtro=filtro)
+    return render_template("piezas.html", piezas=piezas, vehiculos=vehiculos, filtro=filtro, tipo=tipo)
 
 
 @app.route("/piezas/agregar", methods=["POST"])
@@ -987,10 +1039,11 @@ def piezas_agregar():
     v = cur.fetchone()
     placa = v[0] if v else ""
     cur.execute("""
-        INSERT INTO piezas (vehiculo_id, placa, nombre, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo, observaciones)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO piezas (vehiculo_id, placa, nombre, tipo, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo, observaciones)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         vehiculo_id, placa, request.form["nombre"],
+        request.form.get("tipo", "repuesto"),
         request.form.get("km_instalacion") or 0,
         request.form.get("fecha_instalacion") or fecha_local(),
         request.form.get("vida_km") or 0,

@@ -145,7 +145,7 @@
                     <td>{{ r.registrado_por }}</td>
                     <td class="acciones">
                         {% if not r.fecha_salida %}
-                        <a href="/parte-taller/salir/{{ r.id }}" class="btn btn-warning btn-sm" onclick="return confirm('Registrar salida del taller?')">Marcar Salida</a>
+                        <button class="btn btn-warning btn-sm" onclick="abrirSalida({{ r.id }}, {{ r.placa|tojson }})">Marcar Salida</button>
                         {% endif %}
                         {% if session.rol == 'admin' %}
                         <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
@@ -212,6 +212,46 @@
         </div>
     </div>
 
+    <!-- Modal Salida del Taller -->
+    <div class="modal-overlay" id="modal-salida">
+        <div class="modal" style="max-width:700px;">
+            <h2>Salida del Taller - <span id="salida-placa"></span></h2>
+            <p style="color:#94a3b8; margin-bottom:1.2rem;">Llene los datos del trabajo realizado. Se registrará automáticamente en el mantenimiento del vehículo.</p>
+            <form id="form-salida" method="POST" action="">
+                <div class="form-grid">
+                    <div class="form-group"><label>Tipo de Mantenimiento *</label>
+                        <select name="tipo_mantenimiento">
+                            <option value="Correctivo">Correctivo</option>
+                            <option value="Preventivo">Preventivo</option>
+                            <option value="Predictivo">Predictivo</option>
+                            <option value="Cambio de Aceite">Cambio de Aceite</option>
+                            <option value="Frenos">Frenos</option>
+                            <option value="Neumaticos">Neumaticos</option>
+                            <option value="Electrico">Electrico</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Descripcion del trabajo</label><input type="text" name="descripcion_mant" placeholder="Detalle del mantenimiento"></div>
+                    <div class="form-group"><label>Costo Mano de Obra ($)</label><input type="number" name="costo_mo" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Costo Lubricantes ($)</label><input type="number" name="costo_lub" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Costo Repuestos ($)</label><input type="number" name="costo_rep" step="0.01" value="0" oninput="calcSalida()"></div>
+                    <div class="form-group"><label>Total ($)</label><input type="text" id="salida-total" value="0.00" disabled style="font-weight:700; color:#22c55e;"></div>
+                </div>
+
+                <div style="margin-top:1.5rem; border-top:1px solid #334155; padding-top:1rem;">
+                    <h3 style="color:#f59e0b; margin-bottom:0.8rem; font-size:1rem;">Piezas / Repuestos cambiados</h3>
+                    <div id="lista-piezas-salida"></div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="agregarPiezaSalida()" style="margin-top:0.5rem;">+ Agregar pieza</button>
+                </div>
+
+                <div class="form-actions" style="margin-top:2rem;">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar Salida</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <footer>
         <div style="padding-left:2rem;">Creado por Poli. Loor Cevallos Willian Albiery</div>
         <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
@@ -221,6 +261,42 @@
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
         });
+
+        let contadorPiezas = 0;
+        function abrirSalida(id, placa) {
+            document.getElementById('form-salida').action = '/parte-taller/salir/' + id;
+            document.getElementById('salida-placa').textContent = placa;
+            contadorPiezas = 0;
+            agregarPiezaSalida();
+            document.getElementById('modal-salida').classList.add('active');
+        }
+        function agregarPiezaSalida() {
+            const i = contadorPiezas;
+            contadorPiezas++;
+            const div = document.createElement('div');
+            div.className = 'pieza-salida';
+            div.id = 'pieza-' + i;
+            div.innerHTML = `
+                <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; border-bottom:1px solid #1e293b; padding-bottom:0.5rem;">
+                    <input type="text" name="pieza_${i}" placeholder="Nombre de la pieza (Ej: Bateria)" style="flex:2; min-width:140px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <select name="pieza_tipo_${i}" style="flex:0 0 110px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                        <option value="repuesto">Repuesto</option>
+                        <option value="mano_obra">Mano Obra</option>
+                        <option value="lubricante">Lubricante</option>
+                    </select>
+                    <input type="number" name="pieza_vida_km_${i}" placeholder="Vida km" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <input type="number" name="pieza_vida_meses_${i}" placeholder="Vida meses" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    <input type="number" name="pieza_costo_${i}" placeholder="Costo $" step="0.01" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" oninput="calcSalida(${i})">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.parentElement.remove(); calcSalida();">X</button>
+                </div>`;
+            document.getElementById('lista-piezas-salida').appendChild(div);
+        }
+        function calcSalida() {
+            const mo = parseFloat(document.querySelector('#form-salida input[name=costo_mo]').value) || 0;
+            const lub = parseFloat(document.querySelector('#form-salida input[name=costo_lub]').value) || 0;
+            const rep = parseFloat(document.querySelector('#form-salida input[name=costo_rep]').value) || 0;
+            document.getElementById('salida-total').value = (mo + lub + rep).toFixed(2);
+        }
 
         const buscarInput = document.getElementById('buscar-vehiculo');
         const selectVehiculo = document.getElementById('select-vehiculo');
