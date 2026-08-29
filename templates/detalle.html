@@ -355,13 +355,22 @@
             div.id = 'mpieza-' + i;
             div.style.cssText = 'display:flex; gap:0.5rem; align-items:center; margin-bottom:0.8rem; flex-wrap:wrap; border:1px solid #334155; border-radius:8px; padding:0.6rem;';
             div.innerHTML = `
-                <select name="pv_pieza_${i}" onchange="piezaSeleccionada(${i}, this.value)" style="flex:1; min-width:150px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
-                    <option value="">Seleccionar pieza...</option>
-                    ${document.getElementById('catalogo-piezas').innerHTML}
-                </select>
-                <input type="number" name="pv_km_${i}" placeholder="Km ingreso" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=kilometraje]').value || 0}">
-                <input type="date" name="pv_fecha_${i}" style="flex:0 0 140px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=fecha]').value || ''}">
-                <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">X</button>
+                <div style="flex:1; min-width:150px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Pieza del catalogo</label>
+                    <select name="pv_pieza_${i}" onchange="piezaSeleccionada(${i}, this.value)" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                        <option value="">Seleccionar pieza...</option>
+                        ${document.getElementById('catalogo-piezas').innerHTML}
+                    </select>
+                </div>
+                <div style="flex:0 0 90px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Km ingreso</label>
+                    <input type="number" name="pv_km_${i}" placeholder="Km" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=kilometraje]').value || 0}">
+                </div>
+                <div style="flex:0 0 140px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Fecha ingreso</label>
+                    <input type="date" name="pv_fecha_${i}" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=fecha]').value || ''}">
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="this.parentElement.remove()">X</button>
                 <div id="proma-${i}" style="flex-basis:100%; display:none; background:#7f1d1d; color:#fecaca; border-radius:6px; padding:0.6rem; font-size:0.85rem;">
                     <strong>EXCEPCION:</strong> Esta pieza aun esta en vida util en este vehiculo. Si aun asi deseas cambiarla, escribe el motivo (ej: cambio por dano/golpe) para poder guardar:
                     <input type="text" name="pv_excepcion_${i}" placeholder="Motivo de la excepcion..." style="width:100%; margin-top:0.4rem; padding:0.5rem; border-radius:6px; border:1px solid #f59e0b; background:#0f172a; color:#e2e8f0;">

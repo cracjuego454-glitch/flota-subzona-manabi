@@ -78,6 +78,7 @@
             <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
             <a href="/">Inicio</a>
             <a href="/parte-taller" style="color:#f59e0b; font-weight:700;">Parte de Taller</a>
+            <a href="/piezas">Piezas</a>
             <a href="/reportes">Reportes</a>
             {% if session.rol == 'admin' %}
             <a href="/usuarios">Usuarios</a>
@@ -266,9 +267,10 @@
         function abrirSalida(id, placa) {
             document.getElementById('form-salida').action = '/parte-taller/salir/' + id;
             document.getElementById('salida-placa').textContent = placa;
-            contadorPiezas = 0;
-            agregarPiezaSalida();
             document.getElementById('modal-salida').classList.add('active');
+            contadorPiezas = 0;
+            document.getElementById('lista-piezas-salida').innerHTML = '';
+            agregarPiezaSalida();
         }
         function agregarPiezaSalida() {
             const i = contadorPiezas;
