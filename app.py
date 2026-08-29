@@ -101,7 +101,25 @@ def init_db():
             descripcion TEXT,
             kilometraje INTEGER,
             costo REAL DEFAULT 0,
+            costo_mo REAL DEFAULT 0,
+            costo_lub REAL DEFAULT 0,
+            costo_rep REAL DEFAULT 0,
             taller TEXT,
+            FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS piezas (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            placa TEXT,
+            nombre TEXT NOT NULL,
+            km_instalacion INTEGER DEFAULT 0,
+            fecha_instalacion TEXT,
+            vida_km INTEGER DEFAULT 0,
+            vida_meses INTEGER DEFAULT 0,
+            costo REAL DEFAULT 0,
+            observaciones TEXT,
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
     """)
@@ -140,6 +158,11 @@ def add_columns_parte_taller():
     for col in ['nombre_ingresa TEXT', 'telefono TEXT', 'novedad TEXT']:
         try:
             cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+        except Exception:
+            pass
+    for col in ['costo_mo REAL DEFAULT 0', 'costo_lub REAL DEFAULT 0', 'costo_rep REAL DEFAULT 0']:
+        try:
+            cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN {col}")
         except Exception:
             pass
     conn.commit()
@@ -352,16 +375,23 @@ def detalle(id):
 def agregar_mantenimiento(vehiculo_id):
     conn = get_db()
     cur = conn.cursor()
+    costo_mo = float(request.form.get("costo_mo") or 0)
+    costo_lub = float(request.form.get("costo_lub") or 0)
+    costo_rep = float(request.form.get("costo_rep") or 0)
+    costo_total = costo_mo + costo_lub + costo_rep
     cur.execute("""
-        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, taller)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         vehiculo_id,
         request.form["fecha"],
         request.form["tipo"],
         request.form["descripcion"],
         request.form["kilometraje"],
-        request.form["costo"],
+        costo_total,
+        costo_mo,
+        costo_lub,
+        costo_rep,
         request.form["taller"]
     ))
     cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
@@ -383,16 +413,23 @@ def editar_mantenimiento(id):
         conn.close()
         return redirect(url_for("index"))
     vehiculo_id = mant["vehiculo_id"]
+    costo_mo = float(request.form.get("costo_mo") or 0)
+    costo_lub = float(request.form.get("costo_lub") or 0)
+    costo_rep = float(request.form.get("costo_rep") or 0)
+    costo_total = costo_mo + costo_lub + costo_rep
     cur.execute("""
         UPDATE mantenimientos
-        SET fecha=%s, tipo=%s, descripcion=%s, kilometraje=%s, costo=%s, taller=%s
+        SET fecha=%s, tipo=%s, descripcion=%s, kilometraje=%s, costo=%s, costo_mo=%s, costo_lub=%s, costo_rep=%s, taller=%s
         WHERE id=%s
     """, (
         request.form["fecha"],
         request.form["tipo"],
         request.form["descripcion"],
         request.form["kilometraje"],
-        request.form["costo"],
+        costo_total,
+        costo_mo,
+        costo_lub,
+        costo_rep,
         request.form["taller"],
         id
     ))
@@ -885,6 +922,98 @@ def parte_taller_eliminar(id):
     cur.close()
     conn.close()
     return redirect(url_for("parte_taller"))
+
+
+@app.route("/piezas")
+@login_required
+def piezas():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    filtro = request.args.get("filtro", "todas")
+    cur.execute("""
+        SELECT p.*, v.marca, v.modelo, v.kilometraje AS km_actual
+        FROM piezas p
+        LEFT JOIN vehiculos v ON p.vehiculo_id = v.id
+        ORDER BY p.id DESC
+    """)
+    piezas = cur.fetchall()
+    ahora = datetime.now(ECUADOR_TZ)
+    for p in piezas:
+        km_actual = p.get("km_actual") or p.get("km_instalacion") or 0
+        km_recorridos = km_actual - (p.get("km_instalacion") or 0)
+        km_faltan = (p.get("vida_km") or 0) - km_recorridos
+        p["km_recorridos"] = max(km_recorridos, 0)
+        p["km_faltan"] = km_faltan
+
+        meses_transcurridos = 9999
+        if p.get("fecha_instalacion"):
+            try:
+                fi = datetime.strptime(str(p["fecha_instalacion"])[:10], "%Y-%m-%d")
+                dias = (ahora - fi.replace(tzinfo=ECUADOR_TZ)).days
+                meses_transcurridos = dias / 30.44
+            except Exception:
+                meses_transcurridos = 0
+        p["meses_transcurridos"] = None if meses_transcurridos == 9999 else round(meses_transcurridos, 1)
+        p["meses_faltan"] = round((p.get("vida_meses") or 0) - meses_transcurridos, 1) if meses_transcurridos != 9999 else None
+
+        vencida = km_faltan <= 0 or (p.get("vida_meses") and p["meses_faltan"] is not None and p["meses_faltan"] <= 0)
+        por_vencer = (0 < km_faltan <= (p.get("vida_km") or 0) * 0.15) or (p["meses_faltan"] is not None and 0 < p["meses_faltan"] <= (p.get("vida_meses") or 0) * 0.15)
+        if vencida:
+            p["estado"] = "Vencida"
+        elif por_vencer:
+            p["estado"] = "Por vencer"
+        else:
+            p["estado"] = "En vida util"
+
+    if filtro == "vencidas":
+        piezas = [p for p in piezas if p["estado"] == "Vencida"]
+    elif filtro == "proximas":
+        piezas = [p for p in piezas if p["estado"] == "Por vencer"]
+
+    cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
+    vehiculos = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template("piezas.html", piezas=piezas, vehiculos=vehiculos, filtro=filtro)
+
+
+@app.route("/piezas/agregar", methods=["POST"])
+@login_required
+def piezas_agregar():
+    conn = get_db()
+    cur = conn.cursor()
+    vehiculo_id = request.form["vehiculo_id"]
+    cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    v = cur.fetchone()
+    placa = v[0] if v else ""
+    cur.execute("""
+        INSERT INTO piezas (vehiculo_id, placa, nombre, km_instalacion, fecha_instalacion, vida_km, vida_meses, costo, observaciones)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        vehiculo_id, placa, request.form["nombre"],
+        request.form.get("km_instalacion") or 0,
+        request.form.get("fecha_instalacion") or fecha_local(),
+        request.form.get("vida_km") or 0,
+        request.form.get("vida_meses") or 0,
+        request.form.get("costo") or 0,
+        request.form.get("observaciones", "")
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("piezas"))
+
+
+@app.route("/piezas/eliminar/<int:id>")
+@admin_required
+def piezas_eliminar(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM piezas WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("piezas"))
 
 
 @app.route("/reportes")

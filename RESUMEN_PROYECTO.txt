@@ -23,6 +23,9 @@ PostgreSQL: postgresql://flota:uGwdyTgdlfi6ybbgF0ARyYe9YPVE8OvW@dpg-d9bekrfavr4c
 --- BASE DE DATOS ---
 PostgreSQL en Render (Virginia). Todo en español. Hora Ecuador (UTC-5).
 Env vars en Render: DATABASE_URL y SECRET_KEY (ya configuradas).
+NOTA: La base de datos PostgreSQL de Render EXPIRÓ (free database expired). Se migrará a Supabase (gratis, no expira).
+CONTRASEÑA SUPABASE (proyecto flota-manabi): WIllian098*l*
+
 
 --- MECANICAS (11) ---
 Multimarcas, Kia, Ambacar, Chevrolet, Pesados, Great Wall 2025, Great Wall 2026, Motos Multimarcas, Honda, Morini, Kia Tasman
@@ -44,6 +47,11 @@ Activo, En Taller, Inactivo, Remate
 11. Responsive móvil en todas las plantillas (index, detalle, reportes, login)
 12. Hora Ecuador: función fecha_local(), SET timezone por conexión
 13. Parte de Taller (/parte-taller): registro de ingreso/salida de vehículos al taller, tabla en tiempo real, historial de salidas
+14. Parte de Taller incluye: nombre de quien ingresa, teléfono, novedad, observaciones, cálculo de días en taller
+15. Búsqueda rápida de vehículo en selector del Parte de Taller (filtra al escribir placa/marca)
+16. Botón borrar registros del Parte de Taller (solo admin)
+17. Mantenimientos con 3 costos separados: Mano de Obra, Lubricantes, Repuestos + total automático
+18. Control de Piezas (/piezas): registrar pieza en vehículo con km instalación, fecha, vida útil (km y/o meses); calcula km recorridos, km faltan, meses faltan; estado: En vida útil / Por vencer / Vencida; alerta clickeando el estado
 
 --- IMPORTANTE ---
 - Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)
@@ -58,6 +66,7 @@ templates/index.html: Dashboard con stats, tabla vehículos, filtro mecánica
 templates/detalle.html: Detalle vehículo + historial mantenimientos
 templates/reportes.html: Reportes con filtros, estadísticas, tablas
 templates/parte_taller.html: Parte de taller - registro ingreso/salida vehículos
+templates/piezas.html: Control de piezas con vida útil (km/meses), estados y alertas
 templates/usuarios.html: Gestión de usuarios (admin)
 requirements.txt: flask, openpyxl, gunicorn, psycopg2-binary
 static/escudo_policia.png: Escudo Policía Nacional del Ecuador

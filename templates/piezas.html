@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Piezas - FLOTA VEHICULAR</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+        .navbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3b82f6; }
+        .navbar h1 { color: #3b82f6; font-size: 1.5rem; }
+        .navbar-right { display: flex; align-items: center; gap: 1rem; }
+        .navbar a { color: #94a3b8; text-decoration: none; }
+        .navbar a:hover { color: #3b82f6; }
+        .navbar .user-info { color: #64748b; font-size: 0.85rem; }
+        .navbar .user-info strong { color: #e2e8f0; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+        .stat-card .number { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { color: #94a3b8; font-size: 0.9rem; }
+        .stat-card.total .number { color: #3b82f6; }
+        .stat-card.buenas .number { color: #22c55e; }
+        .stat-card.porvencer .number { color: #f59e0b; }
+        .stat-card.vencidas .number { color: #ef4444; }
+        .actions { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; align-items: center; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .btn-active { background: #2563eb; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+        .modal h2 { margin-bottom: 1.5rem; color: #3b82f6; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-group label { color: #94a3b8; font-size: 0.85rem; }
+        .form-group input, .form-group select, .form-group textarea { padding: 0.6rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 0.95rem; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
+        .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end; }
+        table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+        th { background: #334155; padding: 1rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; }
+        tr { background: #1e293b; transition: background 0.2s; }
+        tr:hover { background: #334155; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .badge-vida { background: #166534; color: #22c55e; }
+        .badge-por { background: #78350f; color: #f59e0b; }
+        .badge-vencida { background: #7f1d1d; color: #ef4444; }
+        .alerta { background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: none; }
+        .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        footer { text-align: center; padding: 2rem; color: #475569; font-size: 0.85rem; border-top: 1px solid #1e293b; margin-top: 3rem; }
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+            .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+            .navbar h1 { font-size: 1.1rem; }
+            .container { padding: 0 1rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .number { font-size: 1.5rem; }
+            .actions { flex-direction: column; }
+            .form-grid { grid-template-columns: 1fr; }
+            .modal { padding: 1.5rem; width: 95%; }
+            table { font-size: 0.85rem; display: block; overflow-x: auto; }
+            th, td { padding: 0.5rem; white-space: nowrap; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
+        <div class="navbar-right">
+            <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
+            <a href="/">Inicio</a>
+            <a href="/parte-taller">Parte de Taller</a>
+            <a href="/piezas" style="color:#f59e0b; font-weight:700;">Piezas</a>
+            <a href="/reportes">Reportes</a>
+            {% if session.rol == 'admin' %}
+            <a href="/usuarios">Usuarios</a>
+            {% endif %}
+            <a href="/logout">Cerrar Sesion</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="alerta" class="alerta"></div>
+
+        {% set total = piezas|length %}
+        {% set buenas = piezas|selectattr('estado', 'equalto', 'En vida util')|list|length %}
+        {% set porv = piezas|selectattr('estado', 'equalto', 'Por vencer')|list|length %}
+        {% set venc = piezas|selectattr('estado', 'equalto', 'Vencida')|list|length %}
+
+        <div class="stats">
+            <div class="stat-card total"><div class="number">{{ total }}</div><div class="label">Total Piezas</div></div>
+            <div class="stat-card buenas"><div class="number">{{ buenas }}</div><div class="label">En Vida Util</div></div>
+            <div class="stat-card porvencer"><div class="number">{{ porv }}</div><div class="label">Por Vencer</div></div>
+            <div class="stat-card vencidas"><div class="number">{{ venc }}</div><div class="label">Vencidas</div></div>
+        </div>
+
+        <div class="actions">
+            <a href="/piezas?filtro=todas" class="btn {% if filtro == 'todas' %}btn-active{% else %}btn-primary{% endif %}">Todas</a>
+            <a href="/piezas?filtro=vencidas" class="btn {% if filtro == 'vencidas' %}btn-active{% else %}btn-primary{% endif %}">Vencidas</a>
+            <a href="/piezas?filtro=proximas" class="btn {% if filtro == 'proximas' %}btn-active{% else %}btn-primary{% endif %}">Por Vencer</a>
+            <div style="flex:1;"></div>
+            <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Registrar Pieza</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Pieza</th>
+                    <th>Instalado en (km)</th>
+                    <th>Km actual</th>
+                    <th>Km recorridos</th>
+                    <th>Vida util (km)</th>
+                    <th>Km faltan</th>
+                    <th>Vida util (meses)</th>
+                    <th>Faltan meses</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in piezas %}
+                <tr>
+                    <td><strong>{{ p.placa }}</strong></td>
+                    <td>{{ p.nombre }}</td>
+                    <td>{{ "{:,}".format(p.km_instalacion) }}</td>
+                    <td>{{ "{:,}".format(p.km_actual or p.km_instalacion) }}</td>
+                    <td>{{ "{:,}".format(p.km_recorridos) }}</td>
+                    <td>{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
+                    <td>{% if p.vida_km %}{{ "{:,}".format(p.km_faltan) }}{% else %}-{% endif %}</td>
+                    <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
+                    <td>{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
+                    <td>
+                        {% if p.estado == 'Vencida' %}
+                            <span class="badge badge-vencida" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: FUERA DE RANGO. Pieza vencida, requiere cambio.')">Vencida</span>
+                        {% elif p.estado == 'Por vencer' %}
+                            <span class="badge badge-por" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: Cerca de vencer, planifique el cambio.')">Por Vencer</span>
+                        {% else %}
+                            <span class="badge badge-vida" style="cursor:pointer;" onclick="mostrarAlerta('{{ p.placa }} - {{ p.nombre }}: DENTRO DE RANGO. Aun en vida util.')">En Vida Util</span>
+                        {% endif %}
+                    </td>
+                    <td class="acciones">
+                        {% if session.rol == 'admin' %}
+                        <a href="/piezas/eliminar/{{ p.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza?')">X</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not piezas %}
+                <tr><td colspan="11" style="text-align:center; padding:2rem; color:#64748b;">No hay piezas registradas</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal Registrar Pieza -->
+    <div class="modal-overlay" id="modal-pieza">
+        <div class="modal">
+            <h2>Registrar Pieza / Control de Vida Util</h2>
+            <form action="/piezas/agregar" method="POST">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label>Vehiculo *</label>
+                        <input type="text" id="buscar-pieza" placeholder="Escriba placa o marca..." autocomplete="off" style="padding:0.6rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.95rem; margin-bottom:0.5rem;">
+                        <select name="vehiculo_id" id="select-pieza-veh" size="4" required style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:0.9rem;">
+                            <option value="">Seleccionar vehiculo...</option>
+                            {% for v in vehiculos %}
+                            <option value="{{ v.id }}" data-text="{{ v.placa }} {{ v.marca }} {{ v.modelo }}">{{ v.placa }} - {{ v.marca }} {{ v.modelo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group full"><label>Nombre de la pieza *</label><input type="text" name="nombre" required placeholder="Ej: Amortiguador delantero, Banda, Pastillas de freno..."></div>
+                    <div class="form-group"><label>Km de instalacion</label><input type="number" name="km_instalacion" value="0"></div>
+                    <div class="form-group"><label>Fecha de instalacion</label><input type="date" name="fecha_instalacion"></div>
+                    <div class="form-group"><label>Vida util (km)</label><input type="number" name="vida_km" value="0" placeholder="Ej: 4000"></div>
+                    <div class="form-group"><label>Vida util (meses)</label><input type="number" name="vida_meses" value="0" placeholder="Ej: 6"></div>
+                    <div class="form-group"><label>Costo ($)</label><input type="number" name="costo" step="0.01" value="0"></div>
+                    <div class="form-group full"><label>Observaciones</label><textarea name="observaciones" rows="2" placeholder="Detalles..."></textarea></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar Pieza</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer>
+        <div style="padding-left:2rem;">Creado por Poli. Loor Cevallos Willian Albiery</div>
+        <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
+    </footer>
+
+    <script>
+        function mostrarAlerta(msg) {
+            var a = document.getElementById('alerta');
+            a.textContent = msg;
+            a.style.display = 'block';
+            a.scrollIntoView({behavior: 'smooth', block: 'center'});
+            setTimeout(function() { a.style.display = 'none'; }, 4000);
+        }
+
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        });
+
+        const bc = document.getElementById('buscar-pieza');
+        const sel = document.getElementById('select-pieza-veh');
+        const opts = Array.from(sel.options).slice(1);
+        bc.addEventListener('input', function() {
+            const t = this.value.toLowerCase().trim();
+            sel.innerHTML = '';
+            const d = document.createElement('option');
+            d.value = ''; d.textContent = 'Seleccionar vehiculo...';
+            sel.appendChild(d);
+            if (!t) { opts.forEach(o => sel.appendChild(o)); return; }
+            opts.filter(o => o.dataset.text.toLowerCase().includes(t)).forEach(o => sel.appendChild(o));
+        });
+    </script>
+</body>
+</html>
