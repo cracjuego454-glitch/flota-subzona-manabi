@@ -279,7 +279,6 @@
         document.addEventListener('click', function(e) {
             var b = e.target.closest('.btn-salida');
             if (b) {
-                alert('CLIC DETECTADO - id=' + b.getAttribute('data-id'));
                 abrirModalSalida(b.getAttribute('data-id'), b.getAttribute('data-placa'));
             }
         });
