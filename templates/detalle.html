@@ -267,7 +267,7 @@
 
     <select id="catalogo-piezas" style="display:none;">
         {% for pz in catalogo %}
-        <option value="{{ pz.id }}">{{ pz.nombre }} ({{ 'Repuesto' if pz.tipo=='repuesto' else 'Mano de Obra' if pz.tipo=='mano_obra' else 'Lubricante' }})</option>
+        <option value="{{ pz.id }}" data-tipo="{{ pz.tipo }}" data-costo="{{ pz.costo or 0 }}">{{ pz.nombre }} ({{ 'Repuesto' if pz.tipo=='repuesto' else 'Mano de Obra' if pz.tipo=='mano_obra' else 'Lubricante' }})</option>
         {% endfor %}
     </select>
 
@@ -312,11 +312,35 @@
     </footer>
 
     <script>
-        function calcTotalMant() {
+        function campoTipo(tipo) {
+            if (tipo === 'mano_obra') return '#modal-mant input[name=costo_mo]';
+            if (tipo === 'lubricante') return '#modal-mant input[name=costo_lub]';
+            return '#modal-mant input[name=costo_rep]';
+        }
+        function restarAporte(item) {
+            var prevTipo = item.getAttribute('data-ult-tipo');
+            var prevValor = parseFloat(item.getAttribute('data-ult-valor')) || 0;
+            if (prevTipo) {
+                var campo = document.querySelector(campoTipo(prevTipo));
+                campo.value = ((parseFloat(campo.value) || 0) - prevValor).toFixed(2);
+                item.removeAttribute('data-ult-tipo');
+                item.removeAttribute('data-ult-valor');
+            }
+        }
+        function sumarAporte(item, tipo, valor) {
+            var campo = document.querySelector(campoTipo(tipo));
+            campo.value = ((parseFloat(campo.value) || 0) + valor).toFixed(2);
+            item.setAttribute('data-ult-tipo', tipo);
+            item.setAttribute('data-ult-valor', valor);
+        }
+        function recalcularTotalMant() {
             var mo = parseFloat(document.querySelector('#modal-mant input[name=costo_mo]').value) || 0;
             var lub = parseFloat(document.querySelector('#modal-mant input[name=costo_lub]').value) || 0;
             var rep = parseFloat(document.querySelector('#modal-mant input[name=costo_rep]').value) || 0;
             document.getElementById('mant-total').value = (mo + lub + rep).toFixed(2);
+        }
+        function calcTotalMant() {
+            recalcularTotalMant();
         }
         function calcTotalEditMant() {
             var mo = parseFloat(document.getElementById('em-mo').value) || 0;
@@ -353,6 +377,7 @@
             contadorPiezasMant++;
             const div = document.createElement('div');
             div.id = 'mpieza-' + i;
+            div.className = 'mpieza-item';
             div.style.cssText = 'display:flex; gap:0.5rem; align-items:center; margin-bottom:0.8rem; flex-wrap:wrap; border:1px solid #334155; border-radius:8px; padding:0.6rem;';
             div.innerHTML = `
                 <div style="flex:1; min-width:150px;">
@@ -370,7 +395,11 @@
                     <label style="color:#94a3b8; font-size:0.75rem; display:block;">Fecha ingreso</label>
                     <input type="date" name="pv_fecha_${i}" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" value="${document.querySelector('#modal-mant input[name=fecha]').value || ''}">
                 </div>
-                <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="this.parentElement.remove()">X</button>
+                <div style="flex:0 0 120px;">
+                    <label style="color:#94a3b8; font-size:0.75rem; display:block;">Costo ($)</label>
+                    <input type="number" name="pv_costo_${i}" step="0.01" value="0" placeholder="0.00" oninput="piezaCostoChange(${i})" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="removerPiezaMant(${i})">X</button>
                 <div id="proma-${i}" style="flex-basis:100%; display:none; background:#7f1d1d; color:#fecaca; border-radius:6px; padding:0.6rem; font-size:0.85rem;">
                     <strong>EXCEPCION:</strong> Esta pieza aun esta en vida util en este vehiculo. Si aun asi deseas cambiarla, escribe el motivo (ej: cambio por dano/golpe) para poder guardar:
                     <input type="text" name="pv_excepcion_${i}" placeholder="Motivo de la excepcion..." style="width:100%; margin-top:0.4rem; padding:0.5rem; border-radius:6px; border:1px solid #f59e0b; background:#0f172a; color:#e2e8f0;">
@@ -384,6 +413,37 @@
             } else {
                 aviso.style.display = 'none';
             }
+            var item = document.getElementById('mpieza-' + i);
+            restarAporte(item);
+            var sel = item.querySelector('select[name^="pv_pieza_"]');
+            var opt = sel.selectedOptions[0];
+            var tipo = opt ? opt.getAttribute('data-tipo') : 'repuesto';
+            var costo = opt ? parseFloat(opt.getAttribute('data-costo')) || 0 : 0;
+            item.querySelector('input[name^="pv_costo_"]').value = costo;
+            if (val) {
+                sumarAporte(item, tipo, costo);
+            }
+            recalcularTotalMant();
+        }
+        function piezaCostoChange() {
+            var item = event.target.closest('.mpieza-item');
+            restarAporte(item);
+            var sel = item.querySelector('select[name^="pv_pieza_"]');
+            var opt = sel.selectedOptions[0];
+            var tipo = opt ? opt.getAttribute('data-tipo') : 'repuesto';
+            var costo = parseFloat(item.querySelector('input[name^="pv_costo_"]').value) || 0;
+            if (sel.value) {
+                sumarAporte(item, tipo, costo);
+            }
+            recalcularTotalMant();
+        }
+        function removerPiezaMant(i) {
+            var item = document.getElementById('mpieza-' + i);
+            if (item) {
+                restarAporte(item);
+                item.remove();
+            }
+            recalcularTotalMant();
         }
     </script>
 </body>
