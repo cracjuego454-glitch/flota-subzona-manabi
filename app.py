@@ -999,9 +999,39 @@ def parte_taller():
     vehiculos = cur.fetchall()
     cur.execute("SELECT * FROM piezas ORDER BY nombre")
     catalogo = cur.fetchall()
+
+    ahora = datetime.now(ECUADOR_TZ)
+    cur.execute("""
+        SELECT pv.vehiculo_id, pv.pieza_id, pv.fecha_ingreso, pv.km_ingreso, pv.vida_km, pv.vida_meses, v.kilometraje AS km_actual
+        FROM piezas_vehiculo pv
+        LEFT JOIN vehiculos v ON pv.vehiculo_id = v.id
+        WHERE pv.pieza_id IS NOT NULL
+    """)
+    piezas_activas_map = {}
+    for pz in cur.fetchall():
+        vid = pz["vehiculo_id"]
+        km_actual = pz["km_actual"] or 0
+        km_rec = km_actual - (pz["km_ingreso"] or 0)
+        km_faltan = (pz["vida_km"] or 0) - km_rec
+        m_faltan = None
+        if pz["fecha_ingreso"]:
+            try:
+                dias = (ahora - datetime.strptime(str(pz["fecha_ingreso"])[:10], "%Y-%m-%d").replace(tzinfo=ECUADOR_TZ)).days
+                m_faltan = (pz["vida_meses"] or 0) - dias / 30.44
+            except Exception:
+                pass
+        if km_faltan <= 0:
+            continue
+        if (pz["vida_km"] and km_faltan > 0):
+            if m_faltan is not None and m_faltan <= 0:
+                continue
+        elif m_faltan is not None and m_faltan <= 0:
+            continue
+        piezas_activas_map.setdefault(vid, set()).add(pz["pieza_id"])
+
     cur.close()
     conn.close()
-    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo)
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo, piezas_activas_map=piezas_activas_map)
 
 
 @app.route("/parte-taller/ingresar", methods=["POST"])
@@ -1056,8 +1086,31 @@ def parte_taller_salir(id):
         """, (reg["vehiculo_id"], fecha_str, tipo_mant, descripcion, km_actual, costo_total, costo_mo, costo_lub, costo_rep, reg["mecanica"]))
 
         km_instal = km_actual
-        piezas_nombres = []
+        piezas_activas = set()
+        cur.execute("SELECT pieza_id, fecha_ingreso, km_ingreso, vida_km, vida_meses FROM piezas_vehiculo WHERE vehiculo_id=%s AND pieza_id IS NOT NULL", (reg["vehiculo_id"],))
+        for pz in cur.fetchall():
+            if pz["pieza_id"] is None:
+                continue
+            km_rec = km_actual - (pz["km_ingreso"] or 0)
+            km_faltan = (pz["vida_km"] or 0) - km_rec
+            m_faltan = None
+            if pz["fecha_ingreso"]:
+                try:
+                    dias = (datetime.now(ECUADOR_TZ) - datetime.strptime(str(pz["fecha_ingreso"])[:10], "%Y-%m-%d").replace(tzinfo=ECUADOR_TZ)).days
+                    m_faltan = (pz["vida_meses"] or 0) - dias / 30.44
+                except Exception:
+                    pass
+            if km_faltan <= 0:
+                continue
+            if (pz["vida_km"] and km_faltan > 0):
+                if m_faltan is not None and m_faltan <= 0:
+                    continue
+            elif m_faltan is not None and m_faltan <= 0:
+                continue
+            piezas_activas.add(pz["pieza_id"])
+
         i = 0
+        bloqueados = []
         while True:
             pv_cat = request.form.get(f"pv_sel_{i}")
             if pv_cat is None:
@@ -1066,16 +1119,26 @@ def parte_taller_salir(id):
                 cur.execute("SELECT id, nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pv_cat,))
                 cat = cur.fetchone()
                 if cat:
-                    tipo_p = cat["tipo"]
-                    vida_km = cat["vida_km"] or 0
-                    vida_meses = cat["vida_meses"] or 0
-                    costo_p = float(request.form.get(f"pv_costo_{i}") or cat["costo"] or 0)
-                    cur.execute("""
-                        INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
-                    """, (reg["vehiculo_id"], reg["placa"], cat["id"], cat["nombre"], tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p))
-                    piezas_nombres.append(cat["nombre"])
+                    except_razon = (request.form.get(f"pv_excepcion_{i}") or "").strip()
+                    if cat["id"] in piezas_activas and not except_razon:
+                        bloqueados.append(cat["nombre"])
+                    else:
+                        tipo_p = cat["tipo"]
+                        vida_km = cat["vida_km"] or 0
+                        vida_meses = cat["vida_meses"] or 0
+                        costo_p = float(request.form.get(f"pv_costo_{i}") or cat["costo"] or 0)
+                        cur.execute("""
+                            INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id, observaciones)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, %s)
+                        """, (reg["vehiculo_id"], reg["placa"], cat["id"], cat["nombre"], tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p, except_razon or None))
             i += 1
+
+        if bloqueados:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            flash("ALERTA: La pieza '" + ", ".join(bloqueados) + "' aun esta en vida util en este vehiculo. Marca la opcion EXCEPCION y escribe el motivo (ej: cambio por dano/golpe) para poder registrarla.", "warning")
+            return redirect(url_for("parte_taller"))
 
         cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))
         cur.execute("UPDATE vehiculos SET estado='Activo', kilometraje=%s WHERE id=%s", (km_actual, reg["vehiculo_id"]))

@@ -146,7 +146,7 @@
                     <td>{{ r.registrado_por }}</td>
                     <td class="acciones">
                         {% if not r.fecha_salida %}
-                        <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}">Marcar Salida</button>
+                        <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}" data-vehiculo="{{ r.vehiculo_id }}">Marcar Salida</button>
                         {% endif %}
                         {% if session.rol == 'admin' %}
                         <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
@@ -270,7 +270,13 @@
         });
 
         let contadorPiezas = 0;
-        function abrirModalSalida(id, placa) {
+        const piezasActivasPorVehiculo = {
+            {% for vid, pids in piezas_activas_map.items() %}
+            {{ vid }}: [{% for p in pids %}{{ p }}{% if not loop.last %},{% endif %}{% endfor %}],
+            {% endfor %}
+        };
+        let piezasActivasVehiculo = [];
+        function abrirModalSalida(id, placa, vehiculoId) {
             var modal = document.getElementById('modal-salida');
             var form = document.getElementById('form-salida');
             form.action = '/parte-taller/salir/' + id;
@@ -280,12 +286,13 @@
             modal.style.display = 'flex';
             contadorPiezas = 0;
             document.getElementById('lista-piezas-salida').innerHTML = '';
+            piezasActivasVehiculo = piezasActivasPorVehiculo[vehiculoId] || [];
             try { agregarPiezaSalida(); } catch(err) {}
         }
         document.addEventListener('click', function(e) {
             var b = e.target.closest('.btn-salida');
             if (b) {
-                abrirModalSalida(b.getAttribute('data-id'), b.getAttribute('data-placa'));
+                abrirModalSalida(b.getAttribute('data-id'), b.getAttribute('data-placa'), b.getAttribute('data-vehiculo'));
             }
         });
         function agregarPiezaSalida() {
@@ -308,6 +315,10 @@
                         <input type="number" name="pv_costo_${i}" step="0.01" value="0" oninput="salidaPiezaCostoChange()" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
                     </div>
                     <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="removerPiezaSalida(${i})">X</button>
+                    <div id="pex-${i}" style="flex-basis:100%; display:none; background:#7f1d1d; color:#fecaca; border-radius:6px; padding:0.6rem; font-size:0.85rem;">
+                        <strong>EXCEPCION:</strong> Esta pieza aun esta en vida util en este vehiculo. Si aun asi deseas cambiarla, escribe el motivo (ej: cambio por dano/golpe) para poder guardar:
+                        <input type="text" name="pv_excepcion_${i}" placeholder="Motivo de la excepcion..." style="width:100%; margin-top:0.4rem; padding:0.5rem; border-radius:6px; border:1px solid #f59e0b; background:#0f172a; color:#e2e8f0;">
+                    </div>
                 </div>`;
             document.getElementById('lista-piezas-salida').appendChild(div);
         }
@@ -359,6 +370,11 @@
             var costo = parseFloat(item.querySelector('input[name^="pv_costo_"]').value) || 0;
             if (sel.value) {
                 sumarAporteSalida(item, tipo, costo);
+            }
+            var pex = document.getElementById('pex-' + i);
+            if (pex) {
+                var activa = sel.value && piezasActivasVehiculo.indexOf(parseInt(sel.value)) !== -1;
+                pex.style.display = activa ? 'block' : 'none';
             }
             recalcularTotalSalida();
         }

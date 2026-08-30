@@ -58,6 +58,8 @@ Activo, En Taller, Inactivo, Remate
 22. Al registrar un MANTENIMIENTO en un vehículo, hay un selector para ELEGIR una pieza del catálogo + poner el km de ingreso y la fecha. Así el control de esa pieza se lleva en ESE vehículo.
 23. El control de vida útil por VEHÍCULO se muestra en el Detalle del vehículo (tabla "Piezas de este Vehiculo"): fecha ingreso, km ingreso, km recorridos, km faltan, meses faltan, estado (En vida util / Por vencer / Vencida)
 24. ALERTA DE VIDA ÚTIL AL REGISTRAR MANTENIMIENTO: si eliges en el mantenimiento una pieza que ese vehículo YA tiene y AÚN está en vida útil, se muestra un aviso de EXCEPCIÓN. Debes escribir el motivo (ej: cambio por daño/golpe) para poder guardarla; si no, el sistema BLOQUEA el registro. El motivo queda visible en la ficha del vehículo.
+25. CATÁLOGO EN SALIDA DEL TALLER: en el modal de "Marcar Salida" ya NO se escribe la pieza a mano; ahora se ELIGE del catálogo (igual que en mantenimiento) y su costo se suma automáticamente a la categoría correcta (repuestos/lubricantes/mano de obra) y al total, sin doble conteo.
+26. FILTRO DE VIDA ÚTIL CON EXCEPCIÓN EN SALIDA DEL TALLER: al marcar la salida, si eliges una pieza que ese vehículo YA tiene y AÚN está en vida útil, se muestra un aviso rojo de EXCEPCIÓN. Debes escribir el motivo (ej: cambio por daño/golpe) para poder guardar; si no, el backend BLOQUEA el registro (rollback + mensaje). Igual filtro que en mantenimiento, evita piezas duplicadas en el inventario del vehículo.
 
 --- IMPORTANTE ---
 - Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)
@@ -78,7 +80,7 @@ requirements.txt: flask, openpyxl, gunicorn, psycopg2-binary
 static/escudo_policia.png: Escudo Policía Nacional del Ecuador
 
 --- PROXIMO PASO ---
-(Ninguno pendiente. El usuario decide qué feature implementar siguiente.)
+- Subir el último commit por GitHub Desktop (Summary: "Salida taller: filtro vida util con excepcion + costos automaticos") y probar en Render la Salida del Taller con el filtro de vida útil con excepción + la suma automática de costos.
 
 --- INSTRUCCIONES PARA NUEVO CHAT ---
 Copiar todo este archivo y pegarlo en el chat. Decir "este es el resumen del proyecto, continuamos desde donde quedamos".
