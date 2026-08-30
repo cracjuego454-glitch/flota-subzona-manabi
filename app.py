@@ -1022,7 +1022,7 @@ def parte_taller_ingresar():
     return redirect(url_for("parte_taller"))
 
 
-@app.route("/parte-taller/salir/<int:id>")
+@app.route("/parte-taller/salir/<int:id>", methods=["POST"])
 @login_required
 def parte_taller_salir(id):
     conn = get_db()
