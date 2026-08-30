@@ -39,7 +39,9 @@ def get_db():
         password=url.password,
         host=url.hostname,
         port=url.port,
-        sslmode='require'
+        sslmode='require',
+        connect_timeout=15,
+        options="-c statement_timeout=30000 -c idle_in_transaction_session_timeout=30000"
     )
     conn.autocommit = False
     cur = conn.cursor()
