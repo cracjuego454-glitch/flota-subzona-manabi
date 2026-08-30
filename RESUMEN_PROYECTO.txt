@@ -60,6 +60,7 @@ Activo, En Taller, Inactivo, Remate
 24. ALERTA DE VIDA ÚTIL AL REGISTRAR MANTENIMIENTO: si eliges en el mantenimiento una pieza que ese vehículo YA tiene y AÚN está en vida útil, se muestra un aviso de EXCEPCIÓN. Debes escribir el motivo (ej: cambio por daño/golpe) para poder guardarla; si no, el sistema BLOQUEA el registro. El motivo queda visible en la ficha del vehículo.
 25. CATÁLOGO EN SALIDA DEL TALLER: en el modal de "Marcar Salida" ya NO se escribe la pieza a mano; ahora se ELIGE del catálogo (igual que en mantenimiento) y su costo se suma automáticamente a la categoría correcta (repuestos/lubricantes/mano de obra) y al total, sin doble conteo.
 26. FILTRO DE VIDA ÚTIL CON EXCEPCIÓN EN SALIDA DEL TALLER: al marcar "Confirmar Salida", si eliges una pieza que ese vehículo YA tiene y AÚN está en vida útil, el sistema NO registra y muestra un aviso rojo de EXCEPCIÓN con un campo para escribir el motivo (ej: cambio por daño/golpe). Debes escribir el motivo para poder guardar; si no, se bloquea el envío (client-side) y el backend hace rollback como respaldo. Igual que en mantenimiento, evita piezas duplicadas en el inventario del vehículo.
+27. PIEZAS POR MECÁNICA: el catálogo de piezas (/piezas) ahora se organiza por mecánica. Cada pieza pertenece a UNA sola mecánica (ej: un "Amortiguador" para Multimarcas y otro para Kia son piezas distintas con sus propios valores). En /piezas hay pestañas por mecánica (además de las de tipo), y al registrar un mantenimiento o la salida de un vehículo, el selector SOLO muestra las piezas de la mecánica de ese vehículo. La columna "Mecanica" se muestra en la tabla del catálogo.
 
 --- IMPORTANTE ---
 - Render despliega desde la subcarpeta flota-subzona-manabi/ (NO desde la raíz)
@@ -80,7 +81,7 @@ requirements.txt: flask, openpyxl, gunicorn, psycopg2-binary
 static/escudo_policia.png: Escudo Policía Nacional del Ecuador
 
 --- PROXIMO PASO ---
-- Subir el último commit por GitHub Desktop (Summary: "Salida taller: filtro vida util con excepcion + costos automaticos") y probar en Render la Salida del Taller con el filtro de vida útil con excepción + la suma automática de costos.
+- Subir el último commit por GitHub Desktop (Summary: "Piezas por mecanica: catalogo separado + filtro por vehiculo") y probar en Render: agregar una pieza con su mecánica, ver pestañas por mecánica en /piezas, y que al registrar mantenimiento/salida solo aparezcan las piezas de la mecánica del vehículo.
 
 --- INSTRUCCIONES PARA NUEVO CHAT ---
 Copiar todo este archivo y pegarlo en el chat. Decir "este es el resumen del proyecto, continuamos desde donde quedamos".

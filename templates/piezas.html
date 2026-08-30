@@ -53,6 +53,7 @@
         .badge-vida { background: #166534; color: #22c55e; }
         .badge-por { background: #78350f; color: #f59e0b; }
         .badge-vencida { background: #7f1d1d; color: #ef4444; }
+        .badge-meca { background: #164e63; color: #67e8f9; }
         .alerta { background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: none; }
         .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
         footer { text-align: center; padding: 2rem; color: #475569; font-size: 0.85rem; border-top: 1px solid #1e293b; margin-top: 3rem; }
@@ -88,13 +89,20 @@
     </nav>
 
     <div class="container">
-        <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap;">
+        <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap;">
             <span style="color:#94a3b8;">Catalogo de piezas:</span>
-            <a href="/piezas?tipo=repuesto" class="btn {% if tipo == 'repuesto' %}btn-active{% else %}btn-primary{% endif %}">Repuestos</a>
-            <a href="/piezas?tipo=mano_obra" class="btn {% if tipo == 'mano_obra' %}btn-active{% else %}btn-primary{% endif %}">Mano de Obra</a>
-            <a href="/piezas?tipo=lubricante" class="btn {% if tipo == 'lubricante' %}btn-active{% else %}btn-primary{% endif %}">Lubricantes</a>
+            <a href="/piezas?tipo=repuesto&mecanica={{ mecanica }}" class="btn {% if tipo == 'repuesto' %}btn-active{% else %}btn-primary{% endif %}">Repuestos</a>
+            <a href="/piezas?tipo=mano_obra&mecanica={{ mecanica }}" class="btn {% if tipo == 'mano_obra' %}btn-active{% else %}btn-primary{% endif %}">Mano de Obra</a>
+            <a href="/piezas?tipo=lubricante&mecanica={{ mecanica }}" class="btn {% if tipo == 'lubricante' %}btn-active{% else %}btn-primary{% endif %}">Lubricantes</a>
             <div style="flex:1;"></div>
             <button class="btn btn-success" onclick="document.getElementById('modal-pieza').classList.add('active')">+ Agregar {{ 'Repuesto' if tipo=='repuesto' else 'Mano de Obra' if tipo=='mano_obra' else 'Lubricante' }}</button>
+        </div>
+        <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap;">
+            <span style="color:#94a3b8;">Por mecanica:</span>
+            <a href="/piezas?tipo={{ tipo }}&mecanica=" class="btn {% if not mecanica %}btn-active{% else %}btn-primary{% endif %}">Todas</a>
+            {% for m in mecanicas %}
+            <a href="/piezas?tipo={{ tipo }}&mecanica={{ m.mecanica }}" class="btn {% if mecanica == m.mecanica %}btn-active{% else %}btn-primary{% endif %}">{{ m.mecanica }}</a>
+            {% endfor %}
         </div>
 
         <div style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:1rem 1.5rem; margin-bottom:1.5rem; color:#94a3b8; font-size:0.9rem;">
@@ -106,6 +114,7 @@
                 <tr>
                     <th>Pieza</th>
                     <th>Tipo</th>
+                    <th>Mecanica</th>
                     <th>Vida util (km)</th>
                     <th>Vida util (meses)</th>
                     <th>Costo</th>
@@ -117,18 +126,19 @@
                 <tr>
                     <td><strong>{{ p.nombre }}</strong></td>
                     <td>{{ 'Repuesto' if p.tipo=='repuesto' else 'Mano de Obra' if p.tipo=='mano_obra' else 'Lubricante' }}</td>
+                    <td><span class="badge badge-meca">{{ p.mecanica or 'Multimarcas' }}</span></td>
                     <td>{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
                     <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
                     <td>${{ "{:,.2f}".format(p.costo or 0) }}</td>
                     <td class="acciones">
                         {% if session.rol == 'admin' %}
-                        <a href="/piezas/eliminar/{{ p.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza del catalogo?')">X</a>
+                        <a href="/piezas/eliminar/{{ p.id }}?mecanica={{ mecanica }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar esta pieza del catalogo?')">X</a>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
                 {% if not piezas %}
-                <tr><td colspan="6" style="text-align:center; padding:2rem; color:#64748b;">No hay {{ 'repuestos' if tipo=='repuesto' else 'items de mano de obra' if tipo=='mano_obra' else 'lubricantes' }} en el catalogo</td></tr>
+                <tr><td colspan="7" style="text-align:center; padding:2rem; color:#64748b;">No hay {{ 'repuestos' if tipo=='repuesto' else 'items de mano de obra' if tipo=='mano_obra' else 'lubricantes' }} en el catalogo</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -146,6 +156,14 @@
                             <option value="repuesto" {% if tipo=='repuesto' %}selected{% endif %}>Repuesto / Pieza</option>
                             <option value="mano_obra" {% if tipo=='mano_obra' %}selected{% endif %}>Mano de Obra</option>
                             <option value="lubricante" {% if tipo=='lubricante' %}selected{% endif %}>Lubricante</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Mecanica *</label>
+                        <select name="mecanica" required>
+                            <option value="">Seleccione mecanica...</option>
+                            {% for m in mecanicas %}
+                            <option value="{{ m.mecanica }}" {% if mecanica == m.mecanica %}selected{% endif %}>{{ m.mecanica }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="form-group"><label>Vida util (km)</label><input type="number" name="vida_km" value="0" placeholder="Ej: 4000"></div>

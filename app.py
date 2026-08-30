@@ -117,7 +117,8 @@ def init_db():
             tipo TEXT DEFAULT 'repuesto',
             vida_km INTEGER DEFAULT 0,
             vida_meses INTEGER DEFAULT 0,
-            costo REAL DEFAULT 0
+            costo REAL DEFAULT 0,
+            mecanica TEXT DEFAULT 'Multimarcas'
         )
     """)
     cur.execute("""
@@ -185,6 +186,10 @@ def add_columns_parte_taller():
             cur.execute(f"ALTER TABLE piezas ADD COLUMN {col}")
         except Exception:
             pass
+    try:
+        cur.execute("ALTER TABLE piezas ADD COLUMN mecanica TEXT DEFAULT 'Multimarcas'")
+    except Exception:
+        pass
     try:
         cur.execute("ALTER TABLE piezas_vehiculo ADD COLUMN observaciones TEXT")
     except Exception:
@@ -401,7 +406,7 @@ def detalle(id):
     vehiculo = cur.fetchone()
     cur.execute("SELECT * FROM mantenimientos WHERE vehiculo_id=%s ORDER BY fecha DESC", (id,))
     historial = cur.fetchall()
-    cur.execute("SELECT * FROM piezas ORDER BY nombre ASC")
+    cur.execute("SELECT * FROM piezas WHERE mecanica=%s ORDER BY nombre ASC", (vehiculo["mecanica"] or "Multimarcas",))
     catalogo = cur.fetchall()
 
     cur.execute("SELECT * FROM piezas_vehiculo WHERE vehiculo_id=%s ORDER BY id DESC", (id,))
@@ -997,8 +1002,11 @@ def parte_taller():
                 r["dias"] = 0
     cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
     vehiculos = cur.fetchall()
-    cur.execute("SELECT * FROM piezas ORDER BY nombre")
+    cur.execute("SELECT * FROM piezas ORDER BY mecanica, nombre")
     catalogo = cur.fetchall()
+    catalogo_por_mecanica = {}
+    for p in catalogo:
+        catalogo_por_mecanica.setdefault(p["mecanica"] or "Multimarcas", []).append(p)
 
     ahora = datetime.now(ECUADOR_TZ)
     cur.execute("""
@@ -1031,7 +1039,7 @@ def parte_taller():
 
     cur.close()
     conn.close()
-    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo, piezas_activas_map=piezas_activas_map)
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo, catalogo_por_mecanica=catalogo_por_mecanica, piezas_activas_map=piezas_activas_map)
 
 
 @app.route("/parte-taller/ingresar", methods=["POST"])
@@ -1171,15 +1179,25 @@ def piezas():
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     tipo = request.args.get("tipo", "repuesto")
-    cur.execute("""
-        SELECT * FROM piezas
-        WHERE tipo = %s
-        ORDER BY nombre ASC
-    """, (tipo,))
+    mecanica = request.args.get("mecanica", "")
+    cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
+    mecanicas = cur.fetchall()
+    if mecanica:
+        cur.execute("""
+            SELECT * FROM piezas
+            WHERE tipo = %s AND mecanica = %s
+            ORDER BY nombre ASC
+        """, (tipo, mecanica))
+    else:
+        cur.execute("""
+            SELECT * FROM piezas
+            WHERE tipo = %s
+            ORDER BY nombre ASC
+        """, (tipo,))
     piezas = cur.fetchall()
     cur.close()
     conn.close()
-    return render_template("piezas.html", piezas=piezas, tipo=tipo)
+    return render_template("piezas.html", piezas=piezas, tipo=tipo, mecanicas=mecanicas, mecanica=mecanica)
 
 
 @app.route("/piezas/agregar", methods=["POST"])
@@ -1188,19 +1206,20 @@ def piezas_agregar():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO piezas (nombre, tipo, vida_km, vida_meses, costo)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO piezas (nombre, tipo, vida_km, vida_meses, costo, mecanica)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """, (
         request.form["nombre"],
         request.form.get("tipo", "repuesto"),
         request.form.get("vida_km") or 0,
         request.form.get("vida_meses") or 0,
-        request.form.get("costo") or 0
+        request.form.get("costo") or 0,
+        request.form.get("mecanica", "Multimarcas")
     ))
     conn.commit()
     cur.close()
     conn.close()
-    return redirect(url_for("piezas", tipo=request.form.get("tipo", "repuesto")))
+    return redirect(url_for("piezas", tipo=request.form.get("tipo", "repuesto"), mecanica=request.form.get("mecanica", "")))
 
 
 @app.route("/piezas/eliminar/<int:id>")
@@ -1215,7 +1234,7 @@ def piezas_eliminar(id):
     cur.close()
     conn.close()
     tipo = r[0] if r else "repuesto"
-    return redirect(url_for("piezas", tipo=tipo))
+    return redirect(url_for("piezas", tipo=tipo, mecanica=request.args.get("mecanica", "")))
 
 
 @app.route("/piezas-vehiculo/eliminar/<int:id>")

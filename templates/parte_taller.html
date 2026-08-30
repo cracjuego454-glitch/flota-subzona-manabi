@@ -146,7 +146,7 @@
                     <td>{{ r.registrado_por }}</td>
                     <td class="acciones">
                         {% if not r.fecha_salida %}
-                        <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}" data-vehiculo="{{ r.vehiculo_id }}">Marcar Salida</button>
+                        <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}" data-vehiculo="{{ r.vehiculo_id }}" data-mecanica="{{ r.mecanica }}">Marcar Salida</button>
                         {% endif %}
                         {% if session.rol == 'admin' %}
                         <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
@@ -258,13 +258,36 @@
         <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
     </footer>
 
-    <select id="catalogo-piezas-salida" style="display:none;">
-        {% for pz in catalogo %}
-        <option value="{{ pz.id }}" data-tipo="{{ pz.tipo }}" data-costo="{{ pz.costo or 0 }}">{{ pz.nombre }} ({{ 'Repuesto' if pz.tipo=='repuesto' else 'Mano de Obra' if pz.tipo=='mano_obra' else 'Lubricante' }})</option>
-        {% endfor %}
-    </select>
+    <select id="catalogo-piezas-salida" style="display:none;"></select>
 
     <script>
+        const catalogoPorMecanica = {
+            {% for mec, items in catalogo_por_mecanica.items() %}
+            {{ (mec or 'Multimarcas') | tojson }}: [
+                {% for pz in items %}
+                { id: {{ pz.id }}, nombre: {{ pz.nombre | tojson }}, tipo: {{ pz.tipo | tojson }}, costo: {{ pz.costo or 0 }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]{% if not loop.last %},{% endif %}
+            {% endfor %}
+        };
+        let mecanicaActual = '';
+        function cargarCatalogoSalida(mecanica) {
+            mecanicaActual = mecanica;
+            var sel = document.getElementById('catalogo-piezas-salida');
+            var items = catalogoPorMecanica[mecanica] || [];
+            sel.innerHTML = '';
+            items.forEach(function(p) {
+                var tipoTxt = p.tipo === 'mano_obra' ? 'Mano de Obra' : (p.tipo === 'lubricante' ? 'Lubricante' : 'Repuesto');
+                var opt = document.createElement('option');
+                opt.value = p.id;
+                opt.setAttribute('data-tipo', p.tipo);
+                opt.setAttribute('data-costo', p.costo || 0);
+                opt.textContent = p.nombre + ' (' + tipoTxt + ')';
+                sel.appendChild(opt);
+            });
+        }
+
+    
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) { m.classList.remove('active'); m.style.display = 'none'; } });
         });
@@ -276,7 +299,7 @@
             {% endfor %}
         };
         let piezasActivasVehiculo = [];
-        function abrirModalSalida(id, placa, vehiculoId) {
+        function abrirModalSalida(id, placa, vehiculoId, mecanica) {
             var modal = document.getElementById('modal-salida');
             var form = document.getElementById('form-salida');
             form.action = '/parte-taller/salir/' + id;
@@ -287,12 +310,13 @@
             contadorPiezas = 0;
             document.getElementById('lista-piezas-salida').innerHTML = '';
             piezasActivasVehiculo = piezasActivasPorVehiculo[vehiculoId] || [];
+            cargarCatalogoSalida(mecanica || 'Multimarcas');
             try { agregarPiezaSalida(); } catch(err) {}
         }
         document.addEventListener('click', function(e) {
             var b = e.target.closest('.btn-salida');
             if (b) {
-                abrirModalSalida(b.getAttribute('data-id'), b.getAttribute('data-placa'), b.getAttribute('data-vehiculo'));
+                abrirModalSalida(b.getAttribute('data-id'), b.getAttribute('data-placa'), b.getAttribute('data-vehiculo'), b.getAttribute('data-mecanica'));
             }
         });
         function agregarPiezaSalida() {
