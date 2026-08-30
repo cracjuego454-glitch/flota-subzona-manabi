@@ -504,12 +504,12 @@ def agregar_mantenimiento(vehiculo_id):
             break
         pieza_id = pieza_id.strip()
         if pieza_id:
-            cur.execute("SELECT nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pieza_id,))
+            cur.execute("SELECT id, nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pieza_id,))
             cat = cur.fetchone()
             if cat:
                 except_razon = (request.form.get(f"pv_excepcion_{i}") or "").strip()
                 if pieza_id in activos and not except_razon:
-                    bloqueados.append(cat[1])
+                    bloqueados.append(cat[2])
                 else:
                     km_ing = int(request.form.get(f"pv_km_{i}") or km_actual_mant or 0)
                     fech_ing = request.form.get(f"pv_fecha_{i}") or request.form.get("fecha") or fecha_local()
