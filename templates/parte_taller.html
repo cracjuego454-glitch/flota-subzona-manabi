@@ -218,7 +218,7 @@
         <div class="modal" style="max-width:700px;">
             <h2>Salida del Taller - <span id="salida-placa"></span></h2>
             <p style="color:#94a3b8; margin-bottom:1.2rem;">Llene los datos del trabajo realizado. Se registrará automáticamente en el mantenimiento del vehículo.</p>
-            <form id="form-salida" method="POST" action="">
+            <form id="form-salida" method="POST" action="" onsubmit="return validarSalida()">
                 <div class="form-grid">
                     <div class="form-group"><label>Tipo de Mantenimiento *</label>
                         <select name="tipo_mantenimiento">
@@ -371,12 +371,37 @@
             if (sel.value) {
                 sumarAporteSalida(item, tipo, costo);
             }
-            var pex = document.getElementById('pex-' + i);
-            if (pex) {
-                var activa = sel.value && piezasActivasVehiculo.indexOf(parseInt(sel.value)) !== -1;
-                pex.style.display = activa ? 'block' : 'none';
-            }
             recalcularTotalSalida();
+        }
+        function validarSalida() {
+            var items = document.querySelectorAll('#lista-piezas-salida .pieza-salida');
+            var bloqueadas = [];
+            items.forEach(function(item, idx) {
+                var sel = item.querySelector('select[name^="pv_sel_"]');
+                var i = null;
+                var m = (sel ? sel.name : '').match(/pv_sel_(\d+)/);
+                if (m) { i = parseInt(m[1]); }
+                if (sel && sel.value && piezasActivasVehiculo.indexOf(parseInt(sel.value)) !== -1) {
+                    var motivo = '';
+                    if (i !== null) {
+                        var inp = document.getElementById('form-salida').querySelector('input[name="pv_excepcion_' + i + '"]');
+                        if (inp) { motivo = inp.value.trim(); }
+                        var pex = document.getElementById('pex-' + i);
+                        if (pex) { pex.style.display = motivo ? 'none' : 'block'; }
+                    }
+                    if (!motivo) {
+                        bloqueadas.push(sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : sel.value);
+                    }
+                } else if (i !== null) {
+                    var pex = document.getElementById('pex-' + i);
+                    if (pex) { pex.style.display = 'none'; }
+                }
+            });
+            if (bloqueadas.length) {
+                alert("No se puede registrar la salida: la pieza '" + bloqueadas.join("', '") + "' aun tiene vida util en este vehiculo. Escribe el motivo de la excepcion (ej: cambio por dano/golpe) en el aviso rojo para poder guardar.");
+                return false;
+            }
+            return true;
         }
         function removerPiezaSalida(i) {
             var item = document.getElementById('pieza-' + i);
