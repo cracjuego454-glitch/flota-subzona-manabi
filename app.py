@@ -997,9 +997,11 @@ def parte_taller():
                 r["dias"] = 0
     cur.execute("SELECT id, placa, marca, modelo FROM vehiculos ORDER BY placa")
     vehiculos = cur.fetchall()
+    cur.execute("SELECT * FROM piezas ORDER BY nombre")
+    catalogo = cur.fetchall()
     cur.close()
     conn.close()
-    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro)
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo)
 
 
 @app.route("/parte-taller/ingresar", methods=["POST"])
@@ -1054,24 +1056,25 @@ def parte_taller_salir(id):
         """, (reg["vehiculo_id"], fecha_str, tipo_mant, descripcion, km_actual, costo_total, costo_mo, costo_lub, costo_rep, reg["mecanica"]))
 
         km_instal = km_actual
-        holgura = 0
         piezas_nombres = []
         i = 0
         while True:
-            nombre = request.form.get(f"pieza_{i}")
-            if nombre is None:
+            pv_cat = request.form.get(f"pv_sel_{i}")
+            if pv_cat is None:
                 break
-            nombre = nombre.strip()
-            if nombre:
-                tipo_p = request.form.get(f"pieza_tipo_{i}", "repuesto")
-                vida_km = int(request.form.get(f"pieza_vida_km_{i}") or 0)
-                vida_meses = int(request.form.get(f"pieza_vida_meses_{i}") or 0)
-                costo_p = float(request.form.get(f"pieza_costo_{i}") or 0)
-                cur.execute("""
-                    INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id)
-                    VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, NULL)
-                """, (reg["vehiculo_id"], reg["placa"], nombre, tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p))
-                piezas_nombres.append(nombre)
+            if pv_cat:
+                cur.execute("SELECT id, nombre, tipo, vida_km, vida_meses, costo FROM piezas WHERE id=%s", (pv_cat,))
+                cat = cur.fetchone()
+                if cat:
+                    tipo_p = cat["tipo"]
+                    vida_km = cat["vida_km"] or 0
+                    vida_meses = cat["vida_meses"] or 0
+                    costo_p = float(request.form.get(f"pv_costo_{i}") or cat["costo"] or 0)
+                    cur.execute("""
+                        INSERT INTO piezas_vehiculo (vehiculo_id, placa, pieza_id, nombre, tipo, fecha_ingreso, km_ingreso, vida_km, vida_meses, costo, mantenimiento_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
+                    """, (reg["vehiculo_id"], reg["placa"], cat["id"], cat["nombre"], tipo_p, fecha_str, km_instal, vida_km, vida_meses, costo_p))
+                    piezas_nombres.append(cat["nombre"])
             i += 1
 
         cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))

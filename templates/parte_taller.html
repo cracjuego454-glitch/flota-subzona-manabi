@@ -258,6 +258,12 @@
         <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
     </footer>
 
+    <select id="catalogo-piezas-salida" style="display:none;">
+        {% for pz in catalogo %}
+        <option value="{{ pz.id }}" data-tipo="{{ pz.tipo }}" data-costo="{{ pz.costo or 0 }}">{{ pz.nombre }} ({{ 'Repuesto' if pz.tipo=='repuesto' else 'Mano de Obra' if pz.tipo=='mano_obra' else 'Lubricante' }})</option>
+        {% endfor %}
+    </select>
+
     <script>
         document.querySelectorAll('.modal-overlay').forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) { m.classList.remove('active'); m.style.display = 'none'; } });
@@ -290,24 +296,82 @@
             div.id = 'pieza-' + i;
             div.innerHTML = `
                 <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; border-bottom:1px solid #1e293b; padding-bottom:0.5rem;">
-                    <input type="text" name="pieza_${i}" placeholder="Nombre de la pieza (Ej: Bateria)" style="flex:2; min-width:140px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
-                    <select name="pieza_tipo_${i}" style="flex:0 0 110px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
-                        <option value="repuesto">Repuesto</option>
-                        <option value="mano_obra">Mano Obra</option>
-                        <option value="lubricante">Lubricante</option>
-                    </select>
-                    <input type="number" name="pieza_vida_km_${i}" placeholder="Vida km" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
-                    <input type="number" name="pieza_vida_meses_${i}" placeholder="Vida meses" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
-                    <input type="number" name="pieza_costo_${i}" placeholder="Costo $" step="0.01" style="flex:0 0 90px; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;" oninput="calcSalida(${i})">
-                    <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.parentElement.remove(); calcSalida();">X</button>
+                    <div style="flex:2; min-width:150px;">
+                        <label style="color:#94a3b8; font-size:0.75rem; display:block;">Pieza del catalogo</label>
+                        <select name="pv_sel_${i}" onchange="salidaPiezaSeleccionada(${i}, this.value)" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                            <option value="">Seleccionar pieza...</option>
+                            ${document.getElementById('catalogo-piezas-salida').innerHTML}
+                        </select>
+                    </div>
+                    <div style="flex:0 0 100px;">
+                        <label style="color:#94a3b8; font-size:0.75rem; display:block;">Costo ($)</label>
+                        <input type="number" name="pv_costo_${i}" step="0.01" value="0" oninput="salidaPiezaCostoChange()" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#e2e8f0;">
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm" style="margin-top:1.2rem;" onclick="removerPiezaSalida(${i})">X</button>
                 </div>`;
             document.getElementById('lista-piezas-salida').appendChild(div);
         }
-        function calcSalida() {
+        function campoTipoSalida(tipo) {
+            if (tipo === 'mano_obra') return '#form-salida input[name=costo_mo]';
+            if (tipo === 'lubricante') return '#form-salida input[name=costo_lub]';
+            return '#form-salida input[name=costo_rep]';
+        }
+        function restarAporteSalida(item) {
+            var prevTipo = item.getAttribute('data-ult-tipo');
+            var prevValor = parseFloat(item.getAttribute('data-ult-valor')) || 0;
+            if (prevTipo) {
+                var campo = document.querySelector(campoTipoSalida(prevTipo));
+                campo.value = ((parseFloat(campo.value) || 0) - prevValor).toFixed(2);
+                item.removeAttribute('data-ult-tipo');
+                item.removeAttribute('data-ult-valor');
+            }
+        }
+        function sumarAporteSalida(item, tipo, valor) {
+            var campo = document.querySelector(campoTipoSalida(tipo));
+            campo.value = ((parseFloat(campo.value) || 0) + valor).toFixed(2);
+            item.setAttribute('data-ult-tipo', tipo);
+            item.setAttribute('data-ult-valor', valor);
+        }
+        function recalcularTotalSalida() {
             const mo = parseFloat(document.querySelector('#form-salida input[name=costo_mo]').value) || 0;
             const lub = parseFloat(document.querySelector('#form-salida input[name=costo_lub]').value) || 0;
             const rep = parseFloat(document.querySelector('#form-salida input[name=costo_rep]').value) || 0;
             document.getElementById('salida-total').value = (mo + lub + rep).toFixed(2);
+        }
+        function salidaPiezaSeleccionada(i, val) {
+            var item = document.getElementById('pieza-' + i);
+            restarAporteSalida(item);
+            var opt = item.querySelector('select[name^="pv_sel_"]').selectedOptions[0];
+            var tipo = opt ? opt.getAttribute('data-tipo') : 'repuesto';
+            var costo = opt ? parseFloat(opt.getAttribute('data-costo')) || 0 : 0;
+            item.querySelector('input[name^="pv_costo_"]').value = costo;
+            if (val) {
+                sumarAporteSalida(item, tipo, costo);
+            }
+            recalcularTotalSalida();
+        }
+        function salidaPiezaCostoChange() {
+            var item = event.target.closest('.pieza-salida');
+            restarAporteSalida(item);
+            var sel = item.querySelector('select[name^="pv_sel_"]');
+            var opt = sel.selectedOptions[0];
+            var tipo = opt ? opt.getAttribute('data-tipo') : 'repuesto';
+            var costo = parseFloat(item.querySelector('input[name^="pv_costo_"]').value) || 0;
+            if (sel.value) {
+                sumarAporteSalida(item, tipo, costo);
+            }
+            recalcularTotalSalida();
+        }
+        function removerPiezaSalida(i) {
+            var item = document.getElementById('pieza-' + i);
+            if (item) {
+                restarAporteSalida(item);
+                item.remove();
+            }
+            recalcularTotalSalida();
+        }
+        function calcSalida() {
+            recalcularTotalSalida();
         }
 
         const buscarInput = document.getElementById('buscar-vehiculo');
