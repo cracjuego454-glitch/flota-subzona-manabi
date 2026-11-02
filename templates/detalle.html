@@ -59,13 +59,18 @@
         @media (max-width: 768px) {
             .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
             .navbar h1 { font-size: 1.1rem; }
-            .container { padding: 0 1rem; }
+            .container { padding: 0 0.5rem; }
             .vehicle-grid { grid-template-columns: 1fr; }
             .vehicle-header h2 { font-size: 1.3rem; }
             .form-grid { grid-template-columns: 1fr; }
             .modal { padding: 1.5rem; width: 95%; }
-            table { font-size: 0.85rem; display: block; overflow-x: auto; }
-            th, td { padding: 0.5rem; white-space: nowrap; }
+            table { display: table; table-layout: fixed; font-size: 0.72rem; }
+            th, td { padding: 0.4rem 0.3rem; white-space: normal; word-break: break-word; text-align: center; vertical-align: middle; }
+            th { font-size: 0.64rem; }
+            .col-extra { display: none; }
+            .acciones { justify-content: center; flex-direction: column; gap: 0.3rem; }
+            .acciones .btn { font-size: 0.68rem; padding: 0.35rem 0.4rem; }
+            td[colspan] { padding: 1rem 0.5rem !important; }
         }
     </style>
 </head>
@@ -130,14 +135,14 @@
                 <thead>
                     <tr>
                         <th>Fecha</th>
-                        <th>Tipo</th>
+                        <th class="col-extra">Tipo</th>
                         <th>Descripcion</th>
-                        <th>Kilometraje</th>
-                        <th>M. Obra</th>
-                        <th>Lubric.</th>
-                        <th>Repuesto</th>
+                        <th class="col-extra">Kilometraje</th>
+                        <th class="col-extra">M. Obra</th>
+                        <th class="col-extra">Lubric.</th>
+                        <th class="col-extra">Repuesto</th>
                         <th>Total</th>
-                        <th>Taller</th>
+                        <th class="col-extra">Taller</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -145,14 +150,14 @@
                     {% for m in historial %}
                     <tr>
                         <td>{{ m.fecha }}</td>
-                        <td>{{ m.tipo }}</td>
+                        <td class="col-extra">{{ m.tipo }}</td>
                         <td>{{ m.descripcion }}</td>
-                        <td>{{ "{:,}".format(m.kilometraje) }} km</td>
-                        <td>${{ "{:,.2f}".format(m.costo_mo or 0) }}</td>
-                        <td>${{ "{:,.2f}".format(m.costo_lub or 0) }}</td>
-                        <td>${{ "{:,.2f}".format(m.costo_rep or 0) }}</td>
+                        <td class="col-extra">{{ "{:,}".format(m.kilometraje) }} km</td>
+                        <td class="col-extra">${{ "{:,.2f}".format(m.costo_mo or 0) }}</td>
+                        <td class="col-extra">${{ "{:,.2f}".format(m.costo_lub or 0) }}</td>
+                        <td class="col-extra">${{ "{:,.2f}".format(m.costo_rep or 0) }}</td>
                         <td><strong>${{ "{:,.2f}".format(m.costo) }}</strong></td>
-                        <td>{{ m.taller or '-' }}</td>
+                        <td class="col-extra">{{ m.taller or '-' }}</td>
                         <td class="acciones">
                             {% if session.rol == 'admin' %}
                             <button class="btn btn-primary btn-sm" onclick='editarMant({{ m|tojson_filter }})'>Editar</button>
@@ -174,15 +179,15 @@
                 <thead>
                     <tr>
                         <th>Pieza</th>
-                        <th>Tipo</th>
-                        <th>Fecha ingreso</th>
-                        <th>Km ingreso</th>
-                        <th>Km recorridos</th>
-                        <th>Vida km</th>
+                        <th class="col-extra">Tipo</th>
+                        <th class="col-extra">Fecha ingreso</th>
+                        <th class="col-extra">Km ingreso</th>
+                        <th class="col-extra">Km recorridos</th>
+                        <th class="col-extra">Vida km</th>
                         <th>Km faltan</th>
-                        <th>Vida meses</th>
-                        <th>Faltan meses</th>
-                        <th>Costo</th>
+                        <th class="col-extra">Vida meses</th>
+                        <th class="col-extra">Faltan meses</th>
+                        <th class="col-extra">Costo</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
@@ -191,15 +196,15 @@
                     {% for p in piezas_veh %}
                     <tr>
                         <td><strong>{{ p.nombre }}</strong>{% if p.observaciones %}<div style="color:#f59e0b; font-size:0.78rem; margin-top:0.2rem;">Excepcion: {{ p.observaciones }}</div>{% endif %}</td>
-                        <td>{{ 'Repuesto' if p.tipo=='repuesto' else 'Mano de Obra' if p.tipo=='mano_obra' else 'Lubricante' }}</td>
-                        <td>{{ p.fecha_ingreso or '-' }}</td>
-                        <td>{{ "{:,}".format(p.km_ingreso) if p.km_ingreso else '-' }}</td>
-                        <td>{{ "{:,}".format(p.km_recorridos) }}</td>
-                        <td>{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
+                        <td class="col-extra">{{ 'Repuesto' if p.tipo=='repuesto' else 'Mano de Obra' if p.tipo=='mano_obra' else 'Lubricante' }}</td>
+                        <td class="col-extra">{{ p.fecha_ingreso or '-' }}</td>
+                        <td class="col-extra">{{ "{:,}".format(p.km_ingreso) if p.km_ingreso else '-' }}</td>
+                        <td class="col-extra">{{ "{:,}".format(p.km_recorridos) }}</td>
+                        <td class="col-extra">{{ "{:,}".format(p.vida_km) if p.vida_km else '-' }}</td>
                         <td>{% if p.vida_km %}{{ "{:,}".format(p.km_faltan) }}{% else %}-{% endif %}</td>
-                        <td>{{ p.vida_meses if p.vida_meses else '-' }}</td>
-                        <td>{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
-                        <td>${{ "{:,.2f}".format(p.costo or 0) }}</td>
+                        <td class="col-extra">{{ p.vida_meses if p.vida_meses else '-' }}</td>
+                        <td class="col-extra">{% if p.meses_faltan is not none %}{{ p.meses_faltan }}{% else %}-{% endif %}</td>
+                        <td class="col-extra">${{ "{:,.2f}".format(p.costo or 0) }}</td>
                         <td>
                             {% if p.estado == 'Vencida' %}
                                 <span class="badge badge-activo" style="background:#7f1d1d; color:#ef4444;">Vencida</span>
