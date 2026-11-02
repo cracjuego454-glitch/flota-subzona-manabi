@@ -25,7 +25,7 @@ Supabase (región ca-central-1), conexión por Session pooler puerto 5432.
 Todo en español. Hora Ecuador (UTC-5).
 Env vars en Render: DATABASE_URL (Supabase) y SECRET_KEY (ya configuradas).
 Usuario admin / Willian098 creado en Supabase.
-NOTA: la BD free de Render expiró y no se pudo recuperar. Los datos deben reimportarse desde Excel o volver a registrarse.
+NOTA: la BD free de Render expiró, pero los datos ya están migrados en Supabase (68 vehículos, 40 mantenimientos, 9 partes de taller, 1 pieza).
 CONTRASEÑA SUPABASE (proyecto flota-manabi): WIllian098*l*
 
 
