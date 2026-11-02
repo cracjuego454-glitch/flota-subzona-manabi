@@ -165,10 +165,13 @@ def init_db():
     cur.execute("SELECT id FROM usuarios WHERE rol='admin'")
     admin = cur.fetchone()
     if not admin:
+        admin_password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         cur.execute(
             "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (%s, %s, %s, %s)",
-            ("admin", generate_password_hash("Willian098"), "Administrador", "admin")
+            ("admin", generate_password_hash(admin_password), "Administrador", "admin")
         )
+        if not os.environ.get("ADMIN_PASSWORD"):
+            print(f"[init_db] Usuario admin creado con contraseña temporal: {admin_password}")
     conn.commit()
     cur.close()
     conn.close()

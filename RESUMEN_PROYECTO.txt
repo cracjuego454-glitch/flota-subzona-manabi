@@ -8,7 +8,7 @@ Sistema web de gestion de flota vehicular policial para la Policía Nacional del
 
 --- CREDENCIALES ---
 Usuario: admin
-Contraseña: Willian098
+Contraseña: (definida aparte; no guardar en este archivo público)
 Rol Admin: acceso total (agregar, editar, borrar)
 Rol Operador: solo agregar y ver (no puede editar ni borrar)
 
@@ -18,15 +18,15 @@ Poli. Loor Cevallos Willian Albiery / Coordinador Mecanico
 --- URLs ---
 GitHub: https://github.com/cracjuego454-glitch/flota-subzona-manabi
 Render: https://flota-subzona-manabi.onrender.com
-PostgreSQL (Supabase): postgresql://postgres.axilybnngncsadxvgsaa:WIllian098*l*@aws-0-ca-central-1.pooler.supabase.com:5432/postgres
+PostgreSQL (Supabase): configurada en Render como DATABASE_URL (Session pooler, puerto 5432). Por seguridad, la cadena y contraseña NO se guardan en este archivo.
 
 --- BASE DE DATOS ---
 Supabase (región ca-central-1), conexión por Session pooler puerto 5432.
 Todo en español. Hora Ecuador (UTC-5).
 Env vars en Render: DATABASE_URL (Supabase) y SECRET_KEY (ya configuradas).
-Usuario admin / Willian098 creado en Supabase.
+Usuario admin creado en Supabase.
 NOTA: la BD free de Render expiró, pero los datos ya están migrados en Supabase (68 vehículos, 40 mantenimientos, 9 partes de taller, 1 pieza).
-CONTRASEÑA SUPABASE (proyecto flota-manabi): WIllian098*l*
+SEGURIDAD: no escribir contraseñas ni cadenas de conexión en este archivo (el repositorio es público).
 
 
 --- MECANICAS (11) ---
