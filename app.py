@@ -5,7 +5,7 @@ import psycopg2
 import psycopg2.extras
 from functools import wraps
 from io import BytesIO
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session, flash, get_flashed_messages
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
@@ -26,6 +26,10 @@ def fecha_local():
     return datetime.now(ECUADOR_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def fecha_local_date():
+    return datetime.now(ECUADOR_TZ).date()
+
+
 @app.template_filter("tojson_filter")
 def tojson_filter(obj):
     return json.dumps(dict(obj), ensure_ascii=False, default=str)
@@ -34,9 +38,9 @@ def tojson_filter(obj):
 def get_db():
     url = urlparse(DATABASE_URL)
     conn = psycopg2.connect(
-        database=url.path[1:],
-        user=url.username,
-        password=url.password,
+        database=unquote(url.path[1:]),
+        user=unquote(url.username or ''),
+        password=unquote(url.password or ''),
         host=url.hostname,
         port=url.port,
         sslmode='require',
@@ -59,8 +63,10 @@ def dict_row(cursor):
 
 
 def dict_rows(cursor):
-    colnames = [d[0] for d in cursor.description]
     rows = cursor.fetchall()
+    if rows and isinstance(rows[0], dict):
+        return [dict(r) for r in rows]
+    colnames = [d[0] for d in cursor.description]
     return [dict(zip(colnames, r)) for r in rows]
 
 
@@ -217,7 +223,7 @@ def add_columns_contratos():
     try:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS contratos (
-                id INTEGER PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 numero_contrato TEXT UNIQUE NOT NULL,
                 administrador TEXT NOT NULL,
                 fecha_creacion DATE DEFAULT CURRENT_DATE,
@@ -243,7 +249,7 @@ def add_columns_contratos():
     try:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS contrato_movimientos (
-                id INTEGER PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 contrato_id INTEGER REFERENCES contratos(id),
                 parte_taller_id INTEGER,
                 vehiculo_id INTEGER,
@@ -265,7 +271,7 @@ def add_columns_contratos():
     try:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS contrato_historial_finalizado (
-                id INTEGER PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 contrato_id INTEGER,
                 numero_contrato TEXT,
                 administrador TEXT,
@@ -409,7 +415,7 @@ def index():
     vehiculos = cur.fetchall()
     cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
     mecanicas = cur.fetchall()
-    hoy_idx = fecha_local().date()
+    hoy_idx = fecha_local_date()
     alertas_contratos = []
     try:
         cur.execute("SELECT * FROM contratos WHERE estado='ACTIVO' ORDER BY fecha_fin")
@@ -1153,7 +1159,7 @@ def parte_taller():
             continue
         piezas_activas_map.setdefault(vid, set()).add(pz["pieza_id"])
 
-    hoy_pt = fecha_local().date()
+    hoy_pt = fecha_local_date()
     cur.execute("SELECT * FROM contratos WHERE estado='ACTIVO' AND fecha_fin >= %s AND saldo_total > 0 ORDER BY numero_contrato", (hoy_pt.strftime('%Y-%m-%d'),))
     contratos_activos = cur.fetchall()
 
@@ -1517,9 +1523,9 @@ add_columns_contratos()
 @login_required
 def contratos():
     conn = get_db()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     estado_filtro = request.args.get('estado')
-    hoy = fecha_local().date()
+    hoy = fecha_local_date()
     if estado_filtro in ['ACTIVO', 'FINALIZADO']:
         cur.execute("SELECT * FROM contratos WHERE estado = %s ORDER BY id DESC", (estado_filtro,))
     else:
@@ -1624,7 +1630,7 @@ def contratos_crear():
     cur = conn.cursor()
     numero_contrato = request.form.get('numero_contrato', '').strip()
     administrador = request.form.get('administrador', '').strip()
-    fecha_inicio = request.form.get('fecha_inicio') or fecha_local().date().strftime('%Y-%m-%d')
+    fecha_inicio = request.form.get('fecha_inicio') or fecha_local_date().strftime('%Y-%m-%d')
     dias_vigencia = request.form.get('dias_vigencia') or 0
     try:
         dias_vigencia = int(dias_vigencia)
@@ -1664,7 +1670,7 @@ def contratos_finalizar(cid):
     if session.get('rol') != 'admin':
         return redirect(url_for('contratos'))
     conn = get_db()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     motivo = request.form.get('motivo') or 'Finalizado manualmente'
     try:
         cur.execute("SELECT * FROM contratos WHERE id = %s", (cid,))
