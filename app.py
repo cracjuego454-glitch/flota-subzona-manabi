@@ -211,6 +211,95 @@ def add_columns_parte_taller():
     conn.close()
 
 
+def add_columns_contratos():
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS contratos (
+                id INTEGER PRIMARY KEY,
+                numero_contrato TEXT UNIQUE NOT NULL,
+                administrador TEXT NOT NULL,
+                fecha_creacion DATE DEFAULT CURRENT_DATE,
+                fecha_inicio DATE DEFAULT CURRENT_DATE,
+                dias_vigencia INTEGER NOT NULL,
+                fecha_fin DATE NOT NULL,
+                monto_rep REAL DEFAULT 0,
+                monto_lub REAL DEFAULT 0,
+                monto_mo REAL DEFAULT 0,
+                total_contrato REAL DEFAULT 0,
+                saldo_rep REAL DEFAULT 0,
+                saldo_lub REAL DEFAULT 0,
+                saldo_mo REAL DEFAULT 0,
+                saldo_total REAL DEFAULT 0,
+                estado TEXT DEFAULT 'ACTIVO',
+                motivo_finalizacion TEXT,
+                finalizado_por TEXT,
+                fecha_finalizacion TIMESTAMP
+            )
+        """)
+    except Exception:
+        pass
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS contrato_movimientos (
+                id INTEGER PRIMARY KEY,
+                contrato_id INTEGER REFERENCES contratos(id),
+                parte_taller_id INTEGER,
+                vehiculo_id INTEGER,
+                placa TEXT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                partida TEXT,
+                descripcion TEXT,
+                monto_descontado REAL DEFAULT 0,
+                saldo_rep_antes REAL DEFAULT 0,
+                saldo_rep_despues REAL DEFAULT 0,
+                saldo_lub_antes REAL DEFAULT 0,
+                saldo_lub_despues REAL DEFAULT 0,
+                saldo_mo_antes REAL DEFAULT 0,
+                saldo_mo_despues REAL DEFAULT 0
+            )
+        """)
+    except Exception:
+        pass
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS contrato_historial_finalizado (
+                id INTEGER PRIMARY KEY,
+                contrato_id INTEGER,
+                numero_contrato TEXT,
+                administrador TEXT,
+                fecha_creacion DATE,
+                fecha_inicio DATE,
+                fecha_fin_original DATE,
+                fecha_finalizacion TIMESTAMP,
+                motivo_finalizacion TEXT,
+                finalizado_por TEXT,
+                dias_vigencia INTEGER,
+                monto_rep REAL DEFAULT 0,
+                monto_lub REAL DEFAULT 0,
+                monto_mo REAL DEFAULT 0,
+                total_contrato REAL DEFAULT 0,
+                saldo_rep REAL DEFAULT 0,
+                saldo_lub REAL DEFAULT 0,
+                saldo_mo REAL DEFAULT 0,
+                saldo_total REAL DEFAULT 0,
+                resumen_trabajos TEXT,
+                totales_por_partida TEXT
+            )
+        """)
+    except Exception:
+        pass
+    for col in ['contrato_id INTEGER']:
+        try:
+            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+        except Exception:
+            pass
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -320,9 +409,36 @@ def index():
     vehiculos = cur.fetchall()
     cur.execute("SELECT DISTINCT mecanica FROM vehiculos WHERE mecanica IS NOT NULL AND mecanica != '' ORDER BY mecanica")
     mecanicas = cur.fetchall()
+    hoy_idx = fecha_local().date()
+    alertas_contratos = []
+    try:
+        cur.execute("SELECT * FROM contratos WHERE estado='ACTIVO' ORDER BY fecha_fin")
+        for c in cur.fetchall():
+            fecha_fin_c = c.get('fecha_fin')
+            try:
+                if isinstance(fecha_fin_c, str):
+                    from datetime import datetime as dt
+                    ffc = dt.strptime(fecha_fin_c, '%Y-%m-%d').date()
+                else:
+                    ffc = fecha_fin_c
+                dias_rest = (ffc - hoy_idx).days
+                if dias_rest <= 30 and dias_rest >= 0:
+                    alertas_contratos.append(dict(c, tipo_alerta='vence', dias_restantes=dias_rest))
+                elif dias_rest < 0:
+                    alertas_contratos.append(dict(c, tipo_alerta='vencido', dias_restantes=dias_rest))
+            except Exception:
+                pass
+            if float(c.get('saldo_rep') or 0) < 1000:
+                alertas_contratos.append(dict(c, tipo_alerta='saldo_rep_bajo', partida='Repuestos'))
+            if float(c.get('saldo_lub') or 0) < 1000:
+                alertas_contratos.append(dict(c, tipo_alerta='saldo_lub_bajo', partida='Lubricantes'))
+            if float(c.get('saldo_mo') or 0) < 1000:
+                alertas_contratos.append(dict(c, tipo_alerta='saldo_mo_bajo', partida='Mano de Obra'))
+    except Exception:
+        pass
     cur.close()
     conn.close()
-    return render_template("index.html", vehiculos=vehiculos, mecanicas=mecanicas, mecanica_actual=mecanica_filter)
+    return render_template("index.html", vehiculos=vehiculos, mecanicas=mecanicas, mecanica_actual=mecanica_filter, alertas_contratos=alertas_contratos)
 
 
 @app.route("/agregar", methods=["POST"])
@@ -1037,9 +1153,13 @@ def parte_taller():
             continue
         piezas_activas_map.setdefault(vid, set()).add(pz["pieza_id"])
 
+    hoy_pt = fecha_local().date()
+    cur.execute("SELECT * FROM contratos WHERE estado='ACTIVO' AND fecha_fin >= %s AND saldo_total > 0 ORDER BY numero_contrato", (hoy_pt.strftime('%Y-%m-%d'),))
+    contratos_activos = cur.fetchall()
+
     cur.close()
     conn.close()
-    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo, catalogo_por_mecanica=catalogo_por_mecanica, piezas_activas_map=piezas_activas_map)
+    return render_template("parte_taller.html", registros=registros, vehiculos=vehiculos, filtro=filtro, catalogo=catalogo, catalogo_por_mecanica=catalogo_por_mecanica, piezas_activas_map=piezas_activas_map, contratos_activos=contratos_activos)
 
 
 @app.route("/parte-taller/ingresar", methods=["POST"])
@@ -1048,13 +1168,20 @@ def parte_taller_ingresar():
     conn = get_db()
     cur = conn.cursor()
     vehiculo_id = request.form["vehiculo_id"]
+    contrato_id = request.form.get("contrato_id") or None
     cur.execute("SELECT placa, mecanica FROM vehiculos WHERE id=%s", (vehiculo_id,))
     v = cur.fetchone()
     if v:
-        cur.execute("""
-            INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, nombre_ingresa, telefono, novedad, observaciones, fecha_ingreso, registrado_por)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("nombre_ingresa", ""), request.form.get("telefono", ""), request.form.get("novedad", ""), request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
+        try:
+            cur.execute("""
+                INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, nombre_ingresa, telefono, novedad, observaciones, fecha_ingreso, registrado_por, contrato_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("nombre_ingresa", ""), request.form.get("telefono", ""), request.form.get("novedad", ""), request.form.get("observaciones", ""), fecha_local(), session.get("usuario", ""), contrato_id))
+        except Exception:
+            cur.execute("""
+                INSERT INTO parte_taller (vehiculo_id, placa, mecanica, motivo, nombre_ingresa, telefono, novedad, observaciones, fecha_ingreso, registrado_por)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (vehiculo_id, v[0], v[1], request.form["motivo"], request.form.get("nombre_ingresa", ""), request.form.get("telefono", ""), request.form.get("novedad", ""), request.form.get("observaciones", ""), fecha_local(), session.get("usuario", "")))
         cur.execute("UPDATE vehiculos SET estado='En Taller' WHERE id=%s", (vehiculo_id,))
         conn.commit()
     cur.close()
@@ -1148,9 +1275,60 @@ def parte_taller_salir(id):
             flash("ALERTA: La pieza '" + ", ".join(bloqueados) + "' aun esta en vida util en este vehiculo. Marca la opcion EXCEPCION y escribe el motivo (ej: cambio por dano/golpe) para poder registrarla.", "warning")
             return redirect(url_for("parte_taller"))
 
+        contrato_id = reg.get("contrato_id")
+        if contrato_id:
+            try:
+                cur.execute("SELECT * FROM contratos WHERE id=%s AND estado='ACTIVO'", (contrato_id,))
+                c = cur.fetchone()
+                if c:
+                    s_rep = float(c["saldo_rep"] or 0)
+                    s_lub = float(c["saldo_lub"] or 0)
+                    s_mo = float(c["saldo_mo"] or 0)
+                    if costo_rep > 0 and s_rep >= 0:
+                        ns_rep = s_rep - costo_rep
+                        if ns_rep < 0:
+                            ns_rep = 0
+                        cur.execute("INSERT INTO contrato_movimientos (contrato_id, parte_taller_id, vehiculo_id, placa, partida, descripcion, monto_descontado, saldo_rep_antes, saldo_rep_despues, saldo_lub_antes, saldo_lub_despues, saldo_mo_antes, saldo_mo_despues) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (contrato_id, id, reg["vehiculo_id"], reg["placa"], "repuesto", descripcion, costo_rep, s_rep, ns_rep, s_lub, s_lub, s_mo, s_mo))
+                        s_rep = ns_rep
+                    if costo_lub > 0:
+                        ns_lub = s_lub - costo_lub
+                        if ns_lub < 0:
+                            ns_lub = 0
+                        cur.execute("INSERT INTO contrato_movimientos (contrato_id, parte_taller_id, vehiculo_id, placa, partida, descripcion, monto_descontado, saldo_rep_antes, saldo_rep_despues, saldo_lub_antes, saldo_lub_despues, saldo_mo_antes, saldo_mo_despues) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (contrato_id, id, reg["vehiculo_id"], reg["placa"], "lubricante", descripcion, costo_lub, s_rep, s_rep, s_lub, ns_lub, s_mo, s_mo))
+                        s_lub = ns_lub
+                    if costo_mo > 0:
+                        ns_mo = s_mo - costo_mo
+                        if ns_mo < 0:
+                            ns_mo = 0
+                        cur.execute("INSERT INTO contrato_movimientos (contrato_id, parte_taller_id, vehiculo_id, placa, partida, descripcion, monto_descontado, saldo_rep_antes, saldo_rep_despues, saldo_lub_antes, saldo_lub_despues, saldo_mo_antes, saldo_mo_despues) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (contrato_id, id, reg["vehiculo_id"], reg["placa"], "mano_obra", descripcion, costo_mo, s_rep, s_rep, s_lub, s_lub, s_mo, ns_mo))
+                        s_mo = ns_mo
+                    saldo_total_n = s_rep + s_lub + s_mo
+                    cur.execute("UPDATE contratos SET saldo_rep=%s, saldo_lub=%s, saldo_mo=%s, saldo_total=%s WHERE id=%s", (s_rep, s_lub, s_mo, saldo_total_n, contrato_id))
+            except Exception:
+                pass
+
         cur.execute("UPDATE parte_taller SET fecha_salida=%s WHERE id=%s", (fecha_local(), id))
         cur.execute("UPDATE vehiculos SET estado='Activo', kilometraje=%s WHERE id=%s", (km_actual, reg["vehiculo_id"]))
         conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("parte_taller"))
+
+
+@app.route("/parte-taller/mover-contrato/<int:id>", methods=["POST"])
+@login_required
+def parte_taller_mover_contrato(id):
+    conn = get_db()
+    cur = conn.cursor()
+    contrato_id = request.form.get("contrato_id") or None
+    try:
+        cur.execute("SELECT fecha_salida FROM parte_taller WHERE id=%s", (id,))
+        r = cur.fetchone()
+        if r and not r[0]:
+            cur.execute("UPDATE parte_taller SET contrato_id=%s WHERE id=%s", (contrato_id, id))
+            conn.commit()
+    except Exception:
+        conn.rollback()
     cur.close()
     conn.close()
     return redirect(url_for("parte_taller"))
@@ -1332,6 +1510,179 @@ def reportes():
 
 init_db()
 add_columns_parte_taller()
+add_columns_contratos()
+
+
+@app.route("/contratos")
+@login_required
+def contratos():
+    conn = get_db()
+    cur = conn.cursor()
+    estado_filtro = request.args.get('estado')
+    hoy = fecha_local().date()
+    if estado_filtro in ['ACTIVO', 'FINALIZADO']:
+        cur.execute("SELECT * FROM contratos WHERE estado = %s ORDER BY id DESC", (estado_filtro,))
+    else:
+        cur.execute("SELECT * FROM contratos ORDER BY id DESC")
+    contratos = cur.fetchall()
+    lista = []
+    for c in contratos:
+        d = dict(c)
+        fecha_fin = d.get('fecha_fin')
+        try:
+            if isinstance(fecha_fin, str):
+                from datetime import datetime as dt
+                ffin = dt.strptime(fecha_fin, '%Y-%m-%d').date()
+            else:
+                ffin = fecha_fin
+            dias_restantes = (ffin - hoy).days if ffin else 9999
+            d['dias_restantes'] = dias_restantes
+            d['alerta_vencer'] = (d.get('estado') == 'ACTIVO' and dias_restantes <= 30 and dias_restantes >= 0)
+        except Exception:
+            d['alerta_vencer'] = False
+            d['dias_restantes'] = 9999
+        d['alerta_rep'] = float(d.get('saldo_rep') or 0) < 1000 and d.get('estado') == 'ACTIVO'
+        d['alerta_lub'] = float(d.get('saldo_lub') or 0) < 1000 and d.get('estado') == 'ACTIVO'
+        d['alerta_mo'] = float(d.get('saldo_mo') or 0) < 1000 and d.get('estado') == 'ACTIVO'
+        lista.append(d)
+    cur.close()
+    conn.close()
+    historial_finalizados = _cargar_historial_finalizados()
+    return render_template("contratos.html", contratos=lista, estado_filtro=estado_filtro, hoy=hoy.strftime('%Y-%m-%d'), historial=historial_finalizados)
+
+
+def _resumen_movimientos(cur, contrato_id):
+    """Agrupa los movimientos de un contrato en trabajos y totales por partida."""
+    cur.execute("SELECT * FROM contrato_movimientos WHERE contrato_id=%s ORDER BY fecha, id", (contrato_id,))
+    movimientos = dict_rows(cur)
+    trabajos = {}
+    for m in movimientos:
+        partida = (m.get('partida') or '').lower()
+        monto = float(m.get('monto_descontado') or 0)
+        if monto <= 0:
+            continue
+        key = m.get('parte_taller_id') or f"mov-{m.get('id')}"
+        t = trabajos.setdefault(key, {
+            'parte_taller_id': m.get('parte_taller_id'),
+            'vehiculo_id': m.get('vehiculo_id'),
+            'placa': m.get('placa') or '',
+            'fecha': str(m.get('fecha') or ''),
+            'descripcion': m.get('descripcion') or '',
+            'repuesto': 0.0, 'lubricante': 0.0, 'mano_obra': 0.0, 'total': 0.0,
+        })
+        if partida in t:
+            t[partida] = round(t[partida] + monto, 2)
+        t['total'] = round(t['total'] + monto, 2)
+    totales_por_partida = {}
+    for m in movimientos:
+        partida = m.get('partida') or 'otro'
+        monto = float(m.get('monto_descontado') or 0)
+        if monto <= 0:
+            continue
+        if partida not in totales_por_partida:
+            totales_por_partida[partida] = {'movimientos': 0, 'total': 0.0}
+        totales_por_partida[partida]['movimientos'] += 1
+        totales_por_partida[partida]['total'] = round(totales_por_partida[partida]['total'] + monto, 2)
+    return list(trabajos.values()), totales_por_partida
+
+
+def _cargar_historial_finalizados():
+    import json
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM contrato_historial_finalizado ORDER BY fecha_finalizacion DESC, id DESC")
+    rows = dict_rows(cur)
+    for h in rows:
+        try:
+            h['resumen_trabajos'] = json.loads(h.get('resumen_trabajos') or '[]')
+        except Exception:
+            h['resumen_trabajos'] = []
+        try:
+            h['totales_por_partida'] = json.loads(h.get('totales_por_partida') or '{}')
+        except Exception:
+            h['totales_por_partida'] = {}
+        # Compatibilidad: contratos finalizados antes de este cambio guardaron resumen vacío.
+        if not h['resumen_trabajos'] and h.get('contrato_id'):
+            try:
+                resumen, totales = _resumen_movimientos(cur, h['contrato_id'])
+                h['resumen_trabajos'] = resumen
+                if not h['totales_por_partida']:
+                    h['totales_por_partida'] = totales
+            except Exception:
+                pass
+    cur.close()
+    conn.close()
+    return rows
+
+
+@app.route("/contratos/crear", methods=["POST"])
+@login_required
+def contratos_crear():
+    if session.get('rol') != 'admin':
+        return redirect(url_for('contratos'))
+    conn = get_db()
+    cur = conn.cursor()
+    numero_contrato = request.form.get('numero_contrato', '').strip()
+    administrador = request.form.get('administrador', '').strip()
+    fecha_inicio = request.form.get('fecha_inicio') or fecha_local().date().strftime('%Y-%m-%d')
+    dias_vigencia = request.form.get('dias_vigencia') or 0
+    try:
+        dias_vigencia = int(dias_vigencia)
+    except Exception:
+        dias_vigencia = 0
+    monto_rep = float(request.form.get('monto_rep') or 0)
+    monto_lub = float(request.form.get('monto_lub') or 0)
+    monto_mo = float(request.form.get('monto_mo') or 0)
+    total_contrato = monto_rep + monto_lub + monto_mo
+    try:
+        from datetime import datetime as dt, timedelta
+        fi = dt.strptime(fecha_inicio, '%Y-%m-%d').date()
+        ff = fi + timedelta(days=dias_vigencia)
+        fecha_fin = ff.strftime('%Y-%m-%d')
+    except Exception:
+        fecha_fin = fecha_inicio
+    try:
+        cur.execute("""
+            INSERT INTO contratos (numero_contrato, administrador, fecha_inicio, dias_vigencia, fecha_fin,
+                                   monto_rep, monto_lub, monto_mo, total_contrato,
+                                   saldo_rep, saldo_lub, saldo_mo, saldo_total, estado)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVO')
+        """, (numero_contrato, administrador, fecha_inicio, dias_vigencia, fecha_fin,
+              monto_rep, monto_lub, monto_mo, total_contrato,
+              monto_rep, monto_lub, monto_mo, total_contrato))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+    cur.close()
+    conn.close()
+    return redirect(url_for('contratos'))
+
+
+@app.route("/contratos/finalizar/<int:cid>", methods=["POST"])
+@login_required
+def contratos_finalizar(cid):
+    if session.get('rol') != 'admin':
+        return redirect(url_for('contratos'))
+    conn = get_db()
+    cur = conn.cursor()
+    motivo = request.form.get('motivo') or 'Finalizado manualmente'
+    try:
+        cur.execute("SELECT * FROM contratos WHERE id = %s", (cid,))
+        c = cur.fetchone()
+        if c and c.get('estado') == 'ACTIVO':
+            import json
+            # Resumen de trabajos y consumos por partida
+            resumen_trabajos, totales_por_partida = _resumen_movimientos(cur, cid)
+            cur.execute("INSERT INTO contrato_historial_finalizado (contrato_id, numero_contrato, administrador, fecha_creacion, fecha_inicio, fecha_fin_original, fecha_finalizacion, motivo_finalizacion, finalizado_por, dias_vigencia, monto_rep, monto_lub, monto_mo, total_contrato, saldo_rep, saldo_lub, saldo_mo, saldo_total, resumen_trabajos, totales_por_partida) VALUES (%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (c.get('id'), c.get('numero_contrato'), c.get('administrador'), c.get('fecha_creacion'), c.get('fecha_inicio'), c.get('fecha_fin'), motivo, session.get('usuario'), c.get('dias_vigencia'), c.get('monto_rep'), c.get('monto_lub'), c.get('monto_mo'), c.get('total_contrato'), c.get('saldo_rep'), c.get('saldo_lub'), c.get('saldo_mo'), c.get('saldo_total'), json.dumps(resumen_trabajos, ensure_ascii=False), json.dumps(totales_por_partida, ensure_ascii=False)))
+            cur.execute("UPDATE contratos SET estado='FINALIZADO', motivo_finalizacion=%s, finalizado_por=%s, fecha_finalizacion=CURRENT_TIMESTAMP WHERE id=%s", (motivo, session.get('usuario'), cid))
+            conn.commit()
+        else:
+            conn.rollback()
+    except Exception:
+        conn.rollback()
+    cur.close()
+    conn.close()
+    return redirect(url_for('contratos'))
 
 
 @app.route("/health")

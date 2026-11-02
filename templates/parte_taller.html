@@ -79,6 +79,7 @@
             <a href="/">Inicio</a>
             <a href="/parte-taller" style="color:#f59e0b; font-weight:700;">Parte de Taller</a>
             <a href="/piezas">Piezas</a>
+            <a href="/contratos">Contratos</a>
             <a href="/reportes">Reportes</a>
             {% if session.rol == 'admin' %}
             <a href="/usuarios">Usuarios</a>
@@ -108,6 +109,7 @@
                     <th>Motivo</th>
                     <th>Quien Ingresa</th>
                     <th>Telefono</th>
+                    <th>Contrato</th>
                     <th>Ingreso</th>
                     <th>Salida</th>
                     <th>Dias</th>
@@ -126,6 +128,7 @@
                     <td>{{ r.motivo }}</td>
                     <td>{{ r.nombre_ingresa or '-' }}</td>
                     <td>{{ r.telefono or '-' }}</td>
+                    <td>{{ r.numero_contrato or '-' }}</td>
                     <td>{{ r.fecha_ingreso }}</td>
                     <td>{{ r.fecha_salida or '---' }}</td>
                     <td>
@@ -147,6 +150,7 @@
                     <td class="acciones">
                         {% if not r.fecha_salida %}
                         <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}" data-vehiculo="{{ r.vehiculo_id }}" data-mecanica="{{ r.mecanica }}">Marcar Salida</button>
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-mover-{{ r.id }}').classList.add('active')">Mover Contrato</button>
                         {% endif %}
                         {% if session.rol == 'admin' %}
                         <a href="/parte-taller/eliminar/{{ r.id }}" class="btn btn-danger btn-sm" onclick="return confirm('Eliminar este registro?')">X</a>
@@ -155,7 +159,7 @@
                 </tr>
                 {% endfor %}
                 {% if not registros %}
-                <tr><td colspan="10" style="text-align:center; padding:2rem; color:#64748b;">
+                <tr><td colspan="14" style="text-align:center; padding:2rem; color:#64748b;">
                     {% if filtro == 'activos' %}
                     No hay vehiculos en el taller
                     {% else %}
@@ -166,6 +170,33 @@
             </tbody>
         </table>
     </div>
+
+    {% for r in registros %}
+    {% if not r.fecha_salida %}
+    <div class="modal-overlay" id="modal-mover-{{ r.id }}">
+        <div class="modal">
+            <h2>Mover vehículo de contrato - {{ r.placa }}</h2>
+            <form action="/parte-taller/mover-contrato/{{ r.id }}" method="POST">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label>Contrato</label>
+                        <select name="contrato_id">
+                            <option value="">Sin contrato</option>
+                            {% for c in contratos_activos %}
+                            <option value="{{ c.id }}" {% if r.contrato_id == c.id %}selected{% endif %}>{{ c.numero_contrato }} - {{ c.administrador }} (Saldo ${{ c.saldo_total }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="this.closest('.modal-overlay').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
 
     <!-- Modal Registrar Ingreso -->
     <div class="modal-overlay" id="modal-ingresar">
@@ -183,6 +214,15 @@
                             {% endfor %}
                         </select>
                         <div style="color:#64748b; font-size:0.8rem; margin-top:0.3rem;">Haz clic en un vehiculo de la lista</div>
+                    </div>
+                    <div class="form-group full">
+                        <label>Asignar a contrato (opcional)</label>
+                        <select name="contrato_id">
+                            <option value="">Sin contrato</option>
+                            {% for c in contratos_activos %}
+                            <option value="{{ c.id }}">{{ c.numero_contrato }} - {{ c.administrador }} (Saldo ${{ c.saldo_total }})</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="form-group full">
                         <label>Motivo de ingreso *</label>

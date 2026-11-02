@@ -1,0 +1,199 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1366031760832778" crossorigin="anonymous"></script>
+    <title>Contratos - FLOTA VEHICULAR SUBZONA MANABI</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0}
+        .navbar{background:#1e293b;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #3b82f6}
+        .navbar h1{color:#3b82f6;font-size:1.5rem}
+        .navbar-right{display:flex;align-items:center;gap:1rem}
+        .navbar a{color:#94a3b8;text-decoration:none}
+        .navbar a:hover{color:#3b82f6}
+        .navbar .user-info{color:#64748b;font-size:.85rem}
+        .navbar .user-info strong{color:#e2e8f0}
+        .container{max-width:1600px;margin:2rem auto;padding:0 2rem}
+        .card{background:#1e293b;padding:1.5rem;border-radius:12px;border:1px solid #334155;margin-bottom:1.5rem}
+        .card h2{color:#3b82f6;margin-bottom:1rem}
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+        .form-group{display:flex;flex-direction:column;gap:.4rem}
+        .form-group label{color:#cbd5e1;font-size:.9rem;font-weight:600}
+        .form-group input{padding:.6rem;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#e2e8f0}
+        .form-actions{margin-top:1rem}
+        .btn{padding:.6rem 1.2rem;border:none;border-radius:8px;cursor:pointer;font-weight:600;text-decoration:none}
+        .btn-success{background:#22c55e;color:white}
+        .btn-warning{background:#f59e0b;color:white}
+        .total-box{background:#0f172a;padding:.8rem 1rem;border-radius:8px;border:1px solid #475569;text-align:right;font-weight:700;color:#22c55e}
+        table{width:100%;border-collapse:collapse;background:#1e293b;border-radius:12px;overflow:hidden}
+        th{background:#0f172a;padding:.7rem;text-align:left;color:#94a3b8;font-size:.8rem;text-transform:uppercase}
+        td{padding:.6rem;border-bottom:1px solid #334155}
+        .badge{padding:.2rem .6rem;border-radius:20px;font-size:.75rem;font-weight:700}
+        .badge-activo{background:#166534;color:#22c55e}
+        .badge-finalizado{background:#475569;color:#cbd5e1}
+        .badge-aviso{background:#78350f;color:#fbbf24}
+        .badge-alerta{background:#7f1d1d;color:#fca5a5}
+        .filtros{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}
+        .filtro-link{padding:.4rem .8rem;background:#0f172a;color:#cbd5e1;text-decoration:none;border-radius:8px;border:1px solid #475569}
+        .filtro-link.activo{background:#3b82f6;color:white;border-color:#3b82f6}
+        footer{text-align:center;padding:2rem;color:#475569;font-size:.85rem;border-top:1px solid #1e293b;margin-top:3rem}
+        @media(max-width:768px){.navbar{flex-direction:column;gap:.8rem}.container{padding:0 1rem}table{display:block;overflow-x:auto}}
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>FLOTA VEHICULAR SUBZONA MANABI</h1>
+        <div class="navbar-right">
+            <span class="user-info">{{ session.nombre }} (<strong>{{ session.rol }}</strong>)</span>
+            <a href="/">Inicio</a>
+            <a href="/parte-taller">Parte de Taller</a>
+            <a href="/piezas">Piezas</a>
+            <a href="/contratos">Contratos</a>
+            <a href="/reportes">Reportes</a>
+            {% if session.rol == "admin" %}<a href="/usuarios">Usuarios</a>{% endif %}
+            <a href="/logout">Cerrar Sesión</a>
+        </div>
+    </nav>
+    <div class="container">
+        <h2 style="color:#3b82f6;margin-bottom:1.5rem;">Contratos de Mantenimiento</h2>
+        <div class="card">
+            <h2>➕ Crear Contrato</h2>
+            <form method="POST" action="/contratos/crear" oninput="calcularTotalContrato()">
+                <div class="form-grid">
+                    <div class="form-group"><label>N° de Contrato *</label><input type="text" name="numero_contrato" required></div>
+                    <div class="form-group"><label>Administrador del Contrato *</label><input type="text" name="administrador" required></div>
+                    <div class="form-group"><label>Fecha de Inicio</label><input type="date" name="fecha_inicio" value="{{ hoy }}"></div>
+                    <div class="form-group"><label>Días de Vigencia *</label><input type="number" name="dias_vigencia" min="1" required></div>
+                </div>
+                <div class="form-grid" style="margin-top:1rem;">
+                    <div class="form-group"><label>Monto Repuestos ($)</label><input type="number" step="0.01" name="monto_rep" id="monto_rep" value="0" oninput="calcularTotalContrato()"></div>
+                    <div class="form-group"><label>Monto Lubricantes ($)</label><input type="number" step="0.01" name="monto_lub" id="monto_lub" value="0" oninput="calcularTotalContrato()"></div>
+                    <div class="form-group"><label>Monto Mano de Obra ($)</label><input type="number" step="0.01" name="monto_mo" id="monto_mo" value="0" oninput="calcularTotalContrato()"></div>
+                </div>
+                <div style="margin-top:1rem;display:flex;justify-content:flex-end;"><div class="total-box">TOTAL CONTRATO: $ <span id="total_contrato">0.00</span></div></div>
+                <div class="form-actions"><button type="submit" class="btn btn-success">Guardar Contrato</button></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Listado de Contratos</h2>
+            <div class="filtros">
+                <a href="/contratos?estado=ACTIVO" class="filtro-link {% if estado_filtro == "ACTIVO" %}activo{% endif %}">Activos</a>
+                <a href="/contratos?estado=FINALIZADO" class="filtro-link {% if estado_filtro == "FINALIZADO" %}activo{% endif %}">Finalizados</a>
+                <a href="/contratos" class="filtro-link {% if not estado_filtro %}activo{% endif %}">Todos</a>
+            </div>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead><tr><th>N° Contrato</th><th>Administrador</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Rep.</th><th>Saldo Rep.</th><th>Lub.</th><th>Saldo Lub.</th><th>M.O.</th><th>Saldo M.O.</th><th>Total</th><th>Saldo Total</th><th>Estado</th><th>Alertas</th><th>Acciones</th></tr></thead>
+                    <tbody>
+                        {% for c in contratos %}
+                        <tr>
+                            <td><strong>{{ c.numero_contrato }}</strong></td>
+                            <td>{{ c.administrador }}</td>
+                            <td>{{ c.fecha_inicio }}</td>
+                            <td>{{ c.fecha_fin }}</td>
+                            <td>{{ c.dias_vigencia }}</td>
+                            <td>${{ "%.2f"|format(c.monto_rep) }}</td>
+                            <td>${{ "%.2f"|format(c.saldo_rep) }}</td>
+                            <td>${{ "%.2f"|format(c.monto_lub) }}</td>
+                            <td>${{ "%.2f"|format(c.saldo_lub) }}</td>
+                            <td>${{ "%.2f"|format(c.monto_mo) }}</td>
+                            <td>${{ "%.2f"|format(c.saldo_mo) }}</td>
+                            <td>${{ "%.2f"|format(c.total_contrato) }}</td>
+                            <td><strong>${{ "%.2f"|format(c.saldo_total) }}</strong></td>
+                            <td>{% if c.estado == "ACTIVO" %}<span class="badge badge-activo">ACTIVO</span>{% else %}<span class="badge badge-finalizado">FINALIZADO</span>{% endif %}</td>
+                            <td>
+                                {% if c.alerta_vencer %}<span class="badge badge-aviso">VENCE EN {{ c.dias_restantes }} DÍAS</span> {% endif %}
+                                {% if c.alerta_rep %}<span class="badge badge-alerta">REP &lt; $1000</span> {% endif %}
+                                {% if c.alerta_lub %}<span class="badge badge-alerta">LUB &lt; $1000</span> {% endif %}
+                                {% if c.alerta_mo %}<span class="badge badge-alerta">M.O &lt; $1000</span> {% endif %}
+                            </td>
+                            <td>
+                                {% if c.estado == "ACTIVO" and session.rol == "admin" %}
+                                <form method="POST" action="/contratos/finalizar/{{ c.id }}" onsubmit="return confirm("¿Finalizar contrato {{ c.numero_contrato }}?");" style="display:inline;">
+                                    <input type="hidden" name="motivo" value="Finalizado manualmente">
+                                    <button type="submit" class="btn btn-warning" style="padding:0.4rem 0.6rem;">Finalizar</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Historial de Contratos Finalizados</h2>
+            {% if historial %}
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead><tr><th>N° Contrato</th><th>Administrador</th><th>Inicio</th><th>Fin original</th><th>Finalizado</th><th>Por</th><th>Motivo</th><th>Total</th><th>Saldo final</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                        {% for h in historial %}
+                        <tr>
+                            <td><strong>{{ h.numero_contrato }}</strong></td>
+                            <td>{{ h.administrador }}</td>
+                            <td>{{ h.fecha_inicio }}</td>
+                            <td>{{ h.fecha_fin_original }}</td>
+                            <td>{{ h.fecha_finalizacion }}</td>
+                            <td>{{ h.finalizado_por }}</td>
+                            <td>{{ h.motivo_finalizacion }}</td>
+                            <td>${{ "%.2f"|format(h.total_contrato or 0) }}</td>
+                            <td><strong>${{ "%.2f"|format(h.saldo_total or 0) }}</strong></td>
+                            <td>
+                                <details>
+                                    <summary style="cursor:pointer;color:#2563eb;font-weight:600;">Ver resumen</summary>
+                                    <div style="margin-top:0.6rem;font-size:0.85rem;">
+                                        <div><strong>Trabajos ({{ h.resumen_trabajos|length }}):</strong></div>
+                                        {% if h.resumen_trabajos %}
+                                        <table style="margin:0.4rem 0;font-size:0.8rem;">
+                                            <thead><tr><th>Placa</th><th>Fecha</th><th>Descripción</th><th>Rep.</th><th>Lub.</th><th>M.O.</th><th>Total</th></tr></thead>
+                                            <tbody>
+                                                {% for t in h.resumen_trabajos %}
+                                                <tr>
+                                                    <td>{{ t.placa }}</td>
+                                                    <td>{{ t.fecha }}</td>
+                                                    <td>{{ t.descripcion }}</td>
+                                                    <td>${{ "%.2f"|format(t.repuesto or 0) }}</td>
+                                                    <td>${{ "%.2f"|format(t.lubricante or 0) }}</td>
+                                                    <td>${{ "%.2f"|format(t.mano_obra or 0) }}</td>
+                                                    <td><strong>${{ "%.2f"|format(t.total or 0) }}</strong></td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                        {% else %}<div>Sin trabajos registrados.</div>{% endif %}
+                                        <div style="margin-top:0.4rem;"><strong>Consumo por partida:</strong>
+                                            {% for partida, datos in h.totales_por_partida.items() %}
+                                            <span class="badge" style="background:#e2e8f0;color:#334155;">{{ partida|capitalize }}: ${{ "%.2f"|format(datos.total or 0) }} ({{ datos.movimientos }})</span>
+                                            {% else %}<span>Sin consumos.</span>{% endfor %}
+                                        </div>
+                                    </div>
+                                </details>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color:#64748b;">Aún no hay contratos finalizados.</p>
+            {% endif %}
+        </div>
+    </div>
+    <footer>
+        <div>Creado por Poli. Loor Cevallos Willian Albiery</div>
+        <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
+    </footer>
+    <script>
+        function calcularTotalContrato(){
+            var rep=parseFloat(document.getElementById("monto_rep").value)||0;
+            var lub=parseFloat(document.getElementById("monto_lub").value)||0;
+            var mo=parseFloat(document.getElementById("monto_mo").value)||0;
+            document.getElementById("total_contrato").textContent=(rep+lub+mo).toFixed(2);
+        }
+        calcularTotalContrato();
+    </script>
+</body>
+</html>

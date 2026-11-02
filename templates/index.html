@@ -70,6 +70,8 @@
 
         .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
+        .alerta-contrato { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; padding:0.8rem 1rem; border-radius:10px; margin-bottom:0.8rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; }
+        .alerta-contrato.aviso { background:#78350f; color:#fbbf24; border-color:#f59e0b; }
         @media (max-width: 768px) {
             .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
             .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
@@ -94,6 +96,7 @@
             <a href="/">Inicio</a>
             <a href="/parte-taller">Parte de Taller</a>
             <a href="/piezas">Piezas</a>
+            <a href="/contratos">Contratos</a>
             <a href="/reportes">Reportes</a>
             {% if session.rol == 'admin' %}
             <a href="/usuarios">Usuarios</a>
@@ -103,6 +106,24 @@
     </nav>
 
     <div class="container">
+        {% if alertas_contratos %}
+        <div class="card" style="border-color:#f59e0b;">
+            <h2 style="color:#f59e0b;">⚠️ Alertas de Contratos</h2>
+            {% for ac in alertas_contratos %}
+            <div class="alerta-contrato {% if ac.tipo_alerta == 'vence' %}aviso{% endif %}">
+                <div>
+                    <strong>Contrato {{ ac.numero_contrato }}</strong> - {{ ac.administrador }}
+                    {% if ac.tipo_alerta == 'vence' %} | Vence en {{ ac.dias_restantes }} días ({{ ac.fecha_fin }}){% endif %}
+                    {% if ac.tipo_alerta == 'vencido' %} | VENCIDO desde {{ ac.fecha_fin }}{% endif %}
+                    {% if ac.tipo_alerta == 'saldo_rep_bajo' %} | Saldo REPUESTOS bajo: ${{ ac.saldo_rep }}{% endif %}
+                    {% if ac.tipo_alerta == 'saldo_lub_bajo' %} | Saldo LUBRICANTES bajo: ${{ ac.saldo_lub }}{% endif %}
+                    {% if ac.tipo_alerta == 'saldo_mo_bajo' %} | Saldo MANO DE OBRA bajo: ${{ ac.saldo_mo }}{% endif %}
+                </div>
+                <a href="/contratos" class="btn btn-warning" style="padding:0.4rem 0.7rem;">Ver Contrato</a>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="stats" id="stats">
             <div class="stat-card total"><div class="number" id="st-total">-</div><div class="label">Total Vehiculos</div></div>
             <div class="stat-card activos"><div class="number" id="st-activos">-</div><div class="label">Activos</div></div>
