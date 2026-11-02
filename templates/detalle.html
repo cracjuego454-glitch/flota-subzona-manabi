@@ -243,6 +243,14 @@
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
+                    <div class="form-group"><label>Contrato a aplicar</label>
+                        <select name="contrato_id">
+                            <option value="">Sin contrato</option>
+                            {% for c in contratos_activos %}
+                            <option value="{{ c.id }}">{{ c.numero_contrato }} - {{ c.administrador }} (Saldo: ${{ "%.2f"|format(c.saldo_total or 0) }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="form-group full"><label>Descripcion</label><textarea name="descripcion" rows="3"></textarea></div>
                     <div class="form-group"><label>Kilometraje Actual</label><input type="number" name="kilometraje" value="{{ vehiculo.kilometraje }}"></div>
                     <div class="form-group"><label>Taller / Mecanico</label><input type="text" name="taller"></div>
@@ -289,6 +297,14 @@
                             <option value="Neumaticos">Neumaticos</option>
                             <option value="Electrico">Electrico</option>
                             <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Contrato a aplicar</label>
+                        <select name="contrato_id" id="em-contrato">
+                            <option value="">Sin contrato</option>
+                            {% for c in contratos_activos %}
+                            <option value="{{ c.id }}">{{ c.numero_contrato }} - {{ c.administrador }} (Saldo: ${{ "%.2f"|format(c.saldo_total or 0) }})</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="form-group full"><label>Descripcion</label><textarea name="descripcion" id="em-descripcion" rows="3"></textarea></div>
@@ -353,6 +369,7 @@
             document.getElementById('form-editar-mant').action = '/mantenimiento/editar/' + m.id;
             document.getElementById('em-fecha').value = m.fecha || '';
             document.getElementById('em-tipo').value = m.tipo || 'Preventivo';
+            document.getElementById('em-contrato').value = m.contrato_id || '';
             document.getElementById('em-descripcion').value = m.descripcion || '';
             document.getElementById('em-km').value = m.kilometraje || 0;
             document.getElementById('em-mo').value = m.costo_mo || 0;

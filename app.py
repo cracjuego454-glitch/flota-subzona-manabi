@@ -113,6 +113,7 @@ def init_db():
             costo_lub REAL DEFAULT 0,
             costo_rep REAL DEFAULT 0,
             taller TEXT,
+            contrato_id INTEGER,
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
     """)
@@ -159,6 +160,7 @@ def init_db():
             fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             fecha_salida TIMESTAMP,
             registrado_por TEXT,
+            contrato_id INTEGER,
             FOREIGN KEY (vehiculo_id) REFERENCES vehiculos(id) ON DELETE CASCADE
         )
     """)
@@ -182,31 +184,31 @@ def add_columns_parte_taller():
     cur = conn.cursor()
     for col in ['nombre_ingresa TEXT', 'telefono TEXT', 'novedad TEXT']:
         try:
-            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN IF NOT EXISTS {col}")
         except Exception:
-            pass
+            conn.rollback()
     for col in ['costo_mo REAL DEFAULT 0', 'costo_lub REAL DEFAULT 0', 'costo_rep REAL DEFAULT 0']:
         try:
-            cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN {col}")
+            cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN IF NOT EXISTS {col}")
         except Exception:
-            pass
+            conn.rollback()
     for col in ['tipo TEXT DEFAULT \'repuesto\'']:
         try:
-            cur.execute(f"ALTER TABLE piezas ADD COLUMN {col}")
+            cur.execute(f"ALTER TABLE piezas ADD COLUMN IF NOT EXISTS {col}")
         except Exception:
-            pass
+            conn.rollback()
     try:
-        cur.execute("ALTER TABLE piezas ADD COLUMN mecanica TEXT DEFAULT 'Multimarcas'")
+        cur.execute("ALTER TABLE piezas ADD COLUMN IF NOT EXISTS mecanica TEXT DEFAULT 'Multimarcas'")
     except Exception:
-        pass
+        conn.rollback()
     try:
-        cur.execute("ALTER TABLE piezas_vehiculo ADD COLUMN observaciones TEXT")
+        cur.execute("ALTER TABLE piezas_vehiculo ADD COLUMN IF NOT EXISTS observaciones TEXT")
     except Exception:
-        pass
+        conn.rollback()
     try:
         cur.execute("ALTER TABLE piezas ALTER COLUMN vehiculo_id DROP NOT NULL")
     except Exception:
-        pass
+        conn.rollback()
     try:
         cur.execute("""
             UPDATE piezas SET vehiculo_id = NULL, placa = NULL,
@@ -255,6 +257,7 @@ def add_columns_contratos():
                 id SERIAL PRIMARY KEY,
                 contrato_id INTEGER REFERENCES contratos(id),
                 parte_taller_id INTEGER,
+                mantenimiento_id INTEGER,
                 vehiculo_id INTEGER,
                 placa TEXT,
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -301,9 +304,18 @@ def add_columns_contratos():
         pass
     for col in ['contrato_id INTEGER']:
         try:
-            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN {col}")
+            cur.execute(f"ALTER TABLE parte_taller ADD COLUMN IF NOT EXISTS {col}")
         except Exception:
-            pass
+            conn.rollback()
+    for col in ['contrato_id INTEGER']:
+        try:
+            cur.execute(f"ALTER TABLE mantenimientos ADD COLUMN IF NOT EXISTS {col}")
+        except Exception:
+            conn.rollback()
+    try:
+        cur.execute("ALTER TABLE contrato_movimientos ADD COLUMN IF NOT EXISTS mantenimiento_id INTEGER")
+    except Exception:
+        conn.rollback()
     conn.commit()
     cur.close()
     conn.close()
@@ -533,6 +545,8 @@ def detalle(id):
     historial = cur.fetchall()
     cur.execute("SELECT * FROM piezas WHERE mecanica=%s ORDER BY nombre ASC", (vehiculo["mecanica"] or "Multimarcas",))
     catalogo = cur.fetchall()
+    cur.execute("SELECT * FROM contratos WHERE estado='ACTIVO' ORDER BY fecha_fin ASC")
+    contratos_activos = cur.fetchall()
 
     cur.execute("SELECT * FROM piezas_vehiculo WHERE vehiculo_id=%s ORDER BY id DESC", (id,))
     piezas_veh = cur.fetchall()
@@ -562,7 +576,84 @@ def detalle(id):
 
     cur.close()
     conn.close()
-    return render_template("detalle.html", vehiculo=vehiculo, historial=historial, catalogo=catalogo, piezas_veh=piezas_veh)
+    return render_template("detalle.html", vehiculo=vehiculo, historial=historial, catalogo=catalogo, piezas_veh=piezas_veh, contratos_activos=contratos_activos)
+
+
+def _row_val(row, name, idx):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(name)
+    return row[idx]
+
+
+def _aplicar_consumo_contrato(cur, contrato_id, mantenimiento_id=None, parte_taller_id=None,
+                               vehiculo_id=None, placa='', descripcion='',
+                               costo_rep=0, costo_lub=0, costo_mo=0):
+    """Descuenta los costos indicados de las partidas del contrato activo."""
+    if not contrato_id:
+        return False
+    cur.execute("SELECT saldo_rep, saldo_lub, saldo_mo FROM contratos WHERE id=%s AND estado='ACTIVO'", (contrato_id,))
+    row = cur.fetchone()
+    if not row:
+        return False
+    s_rep = float(_row_val(row, 'saldo_rep', 0) or 0)
+    s_lub = float(_row_val(row, 'saldo_lub', 1) or 0)
+    s_mo = float(_row_val(row, 'saldo_mo', 2) or 0)
+    insert_sql = """
+        INSERT INTO contrato_movimientos
+        (contrato_id, parte_taller_id, mantenimiento_id, vehiculo_id, placa, partida, descripcion,
+         monto_descontado, saldo_rep_antes, saldo_rep_despues,
+         saldo_lub_antes, saldo_lub_despues, saldo_mo_antes, saldo_mo_despues)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """
+    if costo_rep > 0:
+        ns_rep = max(0.0, s_rep - costo_rep)
+        cur.execute(insert_sql, (contrato_id, parte_taller_id, mantenimiento_id, vehiculo_id, placa,
+                                 "repuesto", descripcion, costo_rep, s_rep, ns_rep, s_lub, s_lub, s_mo, s_mo))
+        s_rep = ns_rep
+    if costo_lub > 0:
+        ns_lub = max(0.0, s_lub - costo_lub)
+        cur.execute(insert_sql, (contrato_id, parte_taller_id, mantenimiento_id, vehiculo_id, placa,
+                                 "lubricante", descripcion, costo_lub, s_rep, s_rep, s_lub, ns_lub, s_mo, s_mo))
+        s_lub = ns_lub
+    if costo_mo > 0:
+        ns_mo = max(0.0, s_mo - costo_mo)
+        cur.execute(insert_sql, (contrato_id, parte_taller_id, mantenimiento_id, vehiculo_id, placa,
+                                 "mano_obra", descripcion, costo_mo, s_rep, s_rep, s_lub, s_lub, s_mo, ns_mo))
+        s_mo = ns_mo
+    cur.execute("UPDATE contratos SET saldo_rep=%s, saldo_lub=%s, saldo_mo=%s, saldo_total=%s WHERE id=%s",
+                (s_rep, s_lub, s_mo, s_rep + s_lub + s_mo, contrato_id))
+    return True
+
+
+def _revertir_consumo_mantenimiento(cur, mantenimiento_id):
+    """Devuelve a los contratos lo consumido por un mantenimiento (para editar o eliminar)."""
+    cur.execute("SELECT contrato_id, partida, monto_descontado FROM contrato_movimientos WHERE mantenimiento_id=%s", (mantenimiento_id,))
+    rows = cur.fetchall()
+    if not rows:
+        return
+    acumulado = {}
+    for r in rows:
+        cid = _row_val(r, 'contrato_id', 0)
+        partida = _row_val(r, 'partida', 1)
+        monto = float(_row_val(r, 'monto_descontado', 2) or 0)
+        acumulado.setdefault(cid, {})
+        acumulado[cid][partida] = acumulado[cid].get(partida, 0.0) + monto
+    cur.execute("DELETE FROM contrato_movimientos WHERE mantenimiento_id=%s", (mantenimiento_id,))
+    for cid, partidas in acumulado.items():
+        cur.execute("SELECT monto_rep, monto_lub, monto_mo, saldo_rep, saldo_lub, saldo_mo FROM contratos WHERE id=%s", (cid,))
+        row = cur.fetchone()
+        if not row:
+            continue
+        m_rep = float(_row_val(row, 'monto_rep', 0) or 0)
+        m_lub = float(_row_val(row, 'monto_lub', 1) or 0)
+        m_mo = float(_row_val(row, 'monto_mo', 2) or 0)
+        s_rep = min(m_rep, float(_row_val(row, 'saldo_rep', 3) or 0) + partidas.get('repuesto', 0))
+        s_lub = min(m_lub, float(_row_val(row, 'saldo_lub', 4) or 0) + partidas.get('lubricante', 0))
+        s_mo = min(m_mo, float(_row_val(row, 'saldo_mo', 5) or 0) + partidas.get('mano_obra', 0))
+        cur.execute("UPDATE contratos SET saldo_rep=%s, saldo_lub=%s, saldo_mo=%s, saldo_total=%s WHERE id=%s",
+                    (s_rep, s_lub, s_mo, s_rep + s_lub + s_mo, cid))
 
 
 @app.route("/mantenimiento/<int:vehiculo_id>", methods=["POST"])
@@ -574,9 +665,11 @@ def agregar_mantenimiento(vehiculo_id):
     costo_lub = float(request.form.get("costo_lub") or 0)
     costo_rep = float(request.form.get("costo_rep") or 0)
     costo_total = costo_mo + costo_lub + costo_rep
+    contrato_id = request.form.get("contrato_id") or None
     cur.execute("""
-        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO mantenimientos (vehiculo_id, fecha, tipo, descripcion, kilometraje, costo, costo_mo, costo_lub, costo_rep, taller, contrato_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (
         vehiculo_id,
         request.form["fecha"],
@@ -587,13 +680,20 @@ def agregar_mantenimiento(vehiculo_id):
         costo_mo,
         costo_lub,
         costo_rep,
-        request.form["taller"]
+        request.form["taller"],
+        contrato_id
     ))
+    mantenimiento_id = cur.fetchone()[0]
     cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
 
     cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
     rp = cur.fetchone()
     placa = rp[0] if rp else ""
+
+    _aplicar_consumo_contrato(cur, contrato_id, mantenimiento_id=mantenimiento_id,
+                              vehiculo_id=vehiculo_id, placa=placa,
+                              descripcion=request.form.get("descripcion", ""),
+                              costo_rep=costo_rep, costo_lub=costo_lub, costo_mo=costo_mo)
 
     km_actual_mant = int(request.form.get("kilometraje") or 0)
 
@@ -678,9 +778,10 @@ def editar_mantenimiento(id):
     costo_lub = float(request.form.get("costo_lub") or 0)
     costo_rep = float(request.form.get("costo_rep") or 0)
     costo_total = costo_mo + costo_lub + costo_rep
+    contrato_id = request.form.get("contrato_id") or None
     cur.execute("""
         UPDATE mantenimientos
-        SET fecha=%s, tipo=%s, descripcion=%s, kilometraje=%s, costo=%s, costo_mo=%s, costo_lub=%s, costo_rep=%s, taller=%s
+        SET fecha=%s, tipo=%s, descripcion=%s, kilometraje=%s, costo=%s, costo_mo=%s, costo_lub=%s, costo_rep=%s, taller=%s, contrato_id=%s
         WHERE id=%s
     """, (
         request.form["fecha"],
@@ -692,9 +793,17 @@ def editar_mantenimiento(id):
         costo_lub,
         costo_rep,
         request.form["taller"],
+        contrato_id,
         id
     ))
     cur.execute("UPDATE vehiculos SET kilometraje=%s WHERE id=%s", (request.form["kilometraje"], vehiculo_id))
+    cur.execute("SELECT placa FROM vehiculos WHERE id=%s", (vehiculo_id,))
+    rv = cur.fetchone()
+    placa = rv.get("placa") if isinstance(rv, dict) else (rv[0] if rv else "")
+    _revertir_consumo_mantenimiento(cur, id)
+    _aplicar_consumo_contrato(cur, contrato_id, mantenimiento_id=id, vehiculo_id=vehiculo_id,
+                              placa=placa, descripcion=request.form.get("descripcion", ""),
+                              costo_rep=costo_rep, costo_lub=costo_lub, costo_mo=costo_mo)
     conn.commit()
     cur.close()
     conn.close()
@@ -713,6 +822,7 @@ def eliminar_mantenimiento(id):
         conn.close()
         return redirect(url_for("index"))
     vehiculo_id = mant["vehiculo_id"]
+    _revertir_consumo_mantenimiento(cur, id)
     cur.execute("DELETE FROM mantenimientos WHERE id=%s", (id,))
     conn.commit()
     cur.close()
@@ -1570,7 +1680,8 @@ def _resumen_movimientos(cur, contrato_id):
         monto = float(m.get('monto_descontado') or 0)
         if monto <= 0:
             continue
-        key = m.get('parte_taller_id') or f"mov-{m.get('id')}"
+        key = ('pt', m.get('parte_taller_id')) if m.get('parte_taller_id') else \
+              (('mt', m.get('mantenimiento_id')) if m.get('mantenimiento_id') else ('mov', m.get('id')))
         t = trabajos.setdefault(key, {
             'parte_taller_id': m.get('parte_taller_id'),
             'vehiculo_id': m.get('vehiculo_id'),
@@ -1705,6 +1816,7 @@ def contratos_eliminar(cid):
         cur.execute("SELECT numero_contrato FROM contratos WHERE id=%s", (cid,))
         if cur.fetchone():
             cur.execute("UPDATE parte_taller SET contrato_id=NULL WHERE contrato_id=%s", (cid,))
+            cur.execute("UPDATE mantenimientos SET contrato_id=NULL WHERE contrato_id=%s", (cid,))
             cur.execute("DELETE FROM contrato_movimientos WHERE contrato_id=%s", (cid,))
             cur.execute("DELETE FROM contrato_historial_finalizado WHERE contrato_id=%s", (cid,))
             cur.execute("DELETE FROM contratos WHERE id=%s", (cid,))
