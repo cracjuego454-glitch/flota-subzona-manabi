@@ -18,12 +18,14 @@ Poli. Loor Cevallos Willian Albiery / Coordinador Mecanico
 --- URLs ---
 GitHub: https://github.com/cracjuego454-glitch/flota-subzona-manabi
 Render: https://flota-subzona-manabi.onrender.com
-PostgreSQL: postgresql://flota:uGwdyTgdlfi6ybbgF0ARyYe9YPVE8OvW@dpg-d9bekrfavr4c73ah17s0-a.virginia-postgres.render.com/flota_0mw8
+PostgreSQL (Supabase): postgresql://postgres.axilybnngncsadxvgsaa:WIllian098*l*@aws-0-ca-central-1.pooler.supabase.com:5432/postgres
 
 --- BASE DE DATOS ---
-PostgreSQL en Render (Virginia). Todo en español. Hora Ecuador (UTC-5).
-Env vars en Render: DATABASE_URL y SECRET_KEY (ya configuradas).
-NOTA: La base de datos PostgreSQL de Render EXPIRÓ (free database expired). Se migrará a Supabase (gratis, no expira).
+Supabase (región ca-central-1), conexión por Session pooler puerto 5432.
+Todo en español. Hora Ecuador (UTC-5).
+Env vars en Render: DATABASE_URL (Supabase) y SECRET_KEY (ya configuradas).
+Usuario admin / Willian098 creado en Supabase.
+NOTA: la BD free de Render expiró y no se pudo recuperar. Los datos deben reimportarse desde Excel o volver a registrarse.
 CONTRASEÑA SUPABASE (proyecto flota-manabi): WIllian098*l*
 
 
