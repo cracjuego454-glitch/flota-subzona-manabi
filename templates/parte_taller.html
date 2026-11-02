@@ -46,28 +46,34 @@
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; }
         .form-actions { display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end; }
         table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
-        th { background: #334155; padding: 1rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
-        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; }
+        th { background: #334155; padding: 1rem; text-align: center; font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #1e293b; text-align: center; vertical-align: middle; }
         tr { background: #1e293b; transition: background 0.2s; }
         tr:hover { background: #334155; }
         .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
         .badge-encurso { background: #78350f; color: #f59e0b; }
         .badge-completado { background: #166534; color: #22c55e; }
         .dias { color: #f59e0b; font-weight: 700; }
-        .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
         footer { text-align: center; padding: 2rem; color: #475569; font-size: 0.85rem; border-top: 1px solid #1e293b; margin-top: 3rem; }
+        @media (max-width: 1200px) {
+            th, td { padding: 0.5rem 0.45rem; font-size: 0.78rem; }
+            .acciones { flex-direction: column; gap: 0.35rem; }
+        }
         @media (max-width: 768px) {
             .navbar { flex-direction: column; gap: 0.8rem; padding: 1rem; }
             .navbar-right { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
             .navbar h1 { font-size: 1.1rem; }
-            .container { padding: 0 1rem; }
+            .container { padding: 0 0.5rem; }
             .stats { grid-template-columns: repeat(2, 1fr); }
             .stat-card .number { font-size: 1.5rem; }
             .actions { flex-direction: column; }
             .form-grid { grid-template-columns: 1fr; }
             .modal { padding: 1.5rem; width: 95%; }
-            table { font-size: 0.85rem; display: block; overflow-x: auto; }
-            th, td { padding: 0.5rem; white-space: nowrap; }
+            table { display: table; table-layout: fixed; font-size: 0.72rem; }
+            th, td { padding: 0.4rem 0.3rem; white-space: normal; word-break: break-word; }
+            .col-extra { display: none; }
+            .acciones .btn { font-size: 0.68rem; padding: 0.35rem 0.4rem; }
         }
     </style>
 </head>
@@ -104,18 +110,18 @@
             <thead>
                 <tr>
                     <th>Placa</th>
-                    <th>Mecanica</th>
+                    <th class="col-extra">Mecanica</th>
                     <th>Marca/Modelo</th>
                     <th>Motivo</th>
-                    <th>Quien Ingresa</th>
-                    <th>Telefono</th>
+                    <th class="col-extra">Quien Ingresa</th>
+                    <th class="col-extra">Telefono</th>
                     <th>Contrato</th>
                     <th>Ingreso</th>
-                    <th>Salida</th>
-                    <th>Dias</th>
-                    <th>Novedad</th>
+                    <th class="col-extra">Salida</th>
+                    <th class="col-extra">Dias</th>
+                    <th class="col-extra">Novedad</th>
                     <th>Estado</th>
-                    <th>Registrado por</th>
+                    <th class="col-extra">Registrado por</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -123,22 +129,22 @@
                 {% for r in registros %}
                 <tr>
                     <td><strong>{{ r.placa }}</strong></td>
-                    <td>{{ r.mecanica }}</td>
+                    <td class="col-extra">{{ r.mecanica }}</td>
                     <td>{{ r.marca }} {{ r.modelo }}</td>
                     <td>{{ r.motivo }}</td>
-                    <td>{{ r.nombre_ingresa or '-' }}</td>
-                    <td>{{ r.telefono or '-' }}</td>
+                    <td class="col-extra">{{ r.nombre_ingresa or '-' }}</td>
+                    <td class="col-extra">{{ r.telefono or '-' }}</td>
                     <td>{{ r.numero_contrato or '-' }}</td>
                     <td>{{ r.fecha_ingreso }}</td>
-                    <td>{{ r.fecha_salida or '---' }}</td>
-                    <td>
+                    <td class="col-extra">{{ r.fecha_salida or '---' }}</td>
+                    <td class="col-extra">
                         {% if not r.fecha_salida %}
                             <span class="dias">En curso</span>
                         {% else %}
                             <span style="color:#22c55e; font-weight:700;">{{ r.dias }} dia{{ 's' if r.dias != 1 }}</span>
                         {% endif %}
                     </td>
-                    <td>{{ r.novedad or '-' }}</td>
+                    <td class="col-extra">{{ r.novedad or '-' }}</td>
                     <td>
                         {% if r.fecha_salida %}
                             <span class="badge badge-completado">Completado</span>
@@ -146,7 +152,7 @@
                             <span class="badge badge-encurso">En Taller</span>
                         {% endif %}
                     </td>
-                    <td>{{ r.registrado_por }}</td>
+                    <td class="col-extra">{{ r.registrado_por }}</td>
                     <td class="acciones">
                         {% if not r.fecha_salida %}
                         <button class="btn btn-warning btn-sm btn-salida" data-id="{{ r.id }}" data-placa="{{ r.placa }}" data-vehiculo="{{ r.vehiculo_id }}" data-mecanica="{{ r.mecanica }}">Marcar Salida</button>
