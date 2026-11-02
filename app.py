@@ -1691,6 +1691,30 @@ def contratos_finalizar(cid):
     return redirect(url_for('contratos'))
 
 
+@app.route("/contratos/eliminar/<int:cid>", methods=["POST"])
+@login_required
+def contratos_eliminar(cid):
+    if session.get('rol') != 'admin':
+        return redirect(url_for('contratos'))
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT numero_contrato FROM contratos WHERE id=%s", (cid,))
+        if cur.fetchone():
+            cur.execute("UPDATE parte_taller SET contrato_id=NULL WHERE contrato_id=%s", (cid,))
+            cur.execute("DELETE FROM contrato_movimientos WHERE contrato_id=%s", (cid,))
+            cur.execute("DELETE FROM contrato_historial_finalizado WHERE contrato_id=%s", (cid,))
+            cur.execute("DELETE FROM contratos WHERE id=%s", (cid,))
+            conn.commit()
+        else:
+            conn.rollback()
+    except Exception:
+        conn.rollback()
+    cur.close()
+    conn.close()
+    return redirect(url_for('contratos'))
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
