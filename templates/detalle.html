@@ -273,9 +273,13 @@
                 </div>
 
                 <div style="margin-top:1.5rem; border-top:1px solid #334155; padding-top:1rem;">
-                    <h3 style="color:#f59e0b; margin-bottom:0.8rem; font-size:1rem;">Piezas / Items instalados (opcional)</h3>
-                    <div id="lista-piezas-mant"></div>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="agregarPiezaMant()" style="margin-top:0.5rem;">+ Elegir pieza del catalogo</button>
+                    <details>
+                        <summary style="cursor:pointer; color:#f59e0b; font-weight:600; font-size:1rem;">Piezas / Items instalados (opcional)</summary>
+                        <div style="margin-top:0.8rem;">
+                            <div id="lista-piezas-mant"></div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="agregarPiezaMant()">+ Elegir pieza del catalogo</button>
+                        </div>
+                    </details>
                 </div>
 
                 <div class="form-actions">
