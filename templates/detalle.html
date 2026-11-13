@@ -38,8 +38,10 @@
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
         .modal-overlay.active { display: flex; }
-        .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+        .modal { position: relative; background: #1e293b; border-radius: 12px; padding: 2rem; width: 90%; max-width: 760px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
         .modal h2 { margin-bottom: 1.5rem; color: #3b82f6; }
+        .modal-close { position: absolute; top: 0.5rem; right: 0.7rem; background: transparent; border: none; color: #94a3b8; font-size: 1.8rem; line-height: 1; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; }
+        .modal-close:hover { color: #ef4444; background: #0f172a; }
 
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -63,7 +65,11 @@
             .vehicle-grid { grid-template-columns: 1fr; }
             .vehicle-header h2 { font-size: 1.3rem; }
             .form-grid { grid-template-columns: 1fr; }
-            .modal { padding: 1.5rem; width: 95%; }
+            .modal-overlay { align-items: stretch; justify-content: stretch; }
+            .modal { width: 100%; max-width: 100%; height: 100%; max-height: 100vh; border-radius: 0; border: none; padding: 1rem 0.9rem 1.2rem; }
+            .modal h2 { position: sticky; top: -1rem; z-index: 3; background: #1e293b; margin: -0.2rem 0 1rem; padding: 0.8rem 2.2rem 0.6rem 0; font-size: 1.15rem; }
+            .modal-close { position: fixed; top: 0.7rem; right: 0.8rem; z-index: 120; background: #1e293b; }
+            .modal .form-actions { position: sticky; bottom: -1.2rem; z-index: 3; background: #1e293b; padding: 0.8rem 0 0.2rem; margin-top: 1rem; }
             table { display: table; table-layout: fixed; font-size: 0.72rem; }
             th, td { padding: 0.4rem 0.3rem; white-space: normal; word-break: break-word; text-align: center; vertical-align: middle; }
             th { font-size: 0.64rem; }
@@ -232,6 +238,7 @@
     <!-- Modal Agregar Mantenimiento -->
     <div class="modal-overlay" id="modal-mant">
         <div class="modal">
+            <button type="button" class="modal-close" aria-label="Cerrar" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
             <h2>Agregar Mantenimiento</h2>
             <form action="/mantenimiento/{{ vehiculo.id }}" method="POST">
                 <div class="form-grid">
@@ -288,6 +295,7 @@
     <!-- Modal Editar Mantenimiento -->
     <div class="modal-overlay" id="modal-editar-mant">
         <div class="modal">
+            <button type="button" class="modal-close" aria-label="Cerrar" onclick="this.closest('.modal-overlay').classList.remove('active')">×</button>
             <h2>Editar Mantenimiento</h2>
             <form id="form-editar-mant" method="POST">
                 <div class="form-grid">
@@ -385,8 +393,12 @@
             document.getElementById('modal-editar-mant').classList.add('active');
         }
 
+        function actualizarScrollBody() {
+            document.body.style.overflow = document.querySelector('.modal-overlay.active') ? 'hidden' : '';
+        }
         document.querySelectorAll('.modal-overlay').forEach(m => {
-            m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+            m.addEventListener('click', e => { if (e.target === m) { m.classList.remove('active'); actualizarScrollBody(); } });
+            new MutationObserver(actualizarScrollBody).observe(m, { attributes: true, attributeFilter: ['class'] });
         });
 
         let contadorPiezasMant = 0;
