@@ -27,6 +27,17 @@
         .btn-success{background:#22c55e;color:white}
         .btn-warning{background:#f59e0b;color:white}
         .btn-danger{background:#dc2626;color:white}
+        .btn-primary{background:#3b82f6;color:white}
+        .btn-sm{padding:.4rem .6rem;font-size:.8rem}
+        .flash{padding:.8rem 1rem;border-radius:10px;margin-bottom:1rem;font-weight:600;border:1px solid}
+        .flash-success{background:#166534;color:#bbf7d0;border-color:#22c55e}
+        .flash-error{background:#7f1d1d;color:#fecaca;border-color:#ef4444}
+        .flash-warning{background:#78350f;color:#fde68a;border-color:#f59e0b}
+        .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center}
+        .modal-overlay.active{display:flex}
+        .modal{background:#1e293b;border-radius:12px;padding:2rem;width:90%;max-width:600px;border:1px solid #334155;max-height:90vh;overflow-y:auto}
+        .modal h2{color:#3b82f6;margin-bottom:1.5rem}
+        .modal .form-actions{display:flex;justify-content:flex-end;gap:1rem}
         .total-box{background:#0f172a;padding:.8rem 1rem;border-radius:8px;border:1px solid #475569;text-align:right;font-weight:700;color:#22c55e}
         table{width:100%;border-collapse:collapse;background:#1e293b;border-radius:12px;overflow:hidden}
         th{background:#0f172a;padding:.7rem;text-align:left;color:#94a3b8;font-size:.8rem;text-transform:uppercase}
@@ -40,7 +51,7 @@
         .filtro-link{padding:.4rem .8rem;background:#0f172a;color:#cbd5e1;text-decoration:none;border-radius:8px;border:1px solid #475569}
         .filtro-link.activo{background:#3b82f6;color:white;border-color:#3b82f6}
         footer{text-align:center;padding:2rem;color:#475569;font-size:.85rem;border-top:1px solid #1e293b;margin-top:3rem}
-        @media(max-width:768px){.navbar{flex-direction:column;gap:.8rem}.container{padding:0 1rem}table{display:block;overflow-x:auto}}
+        @media(max-width:768px){.navbar{flex-direction:column;gap:.8rem}.navbar-right{flex-wrap:wrap;justify-content:center;gap:.5rem}.container{padding:0 .5rem}.form-grid{grid-template-columns:1fr}table{display:table;table-layout:fixed;font-size:.68rem}th,td{padding:.35rem .25rem;white-space:normal;word-break:break-word;text-align:center;vertical-align:middle}.col-extra{display:none}.btn{padding:.4rem .5rem;font-size:.7rem}.modal{padding:1.25rem;width:96%}}
     </style>
 </head>
 <body>
@@ -58,6 +69,13 @@
         </div>
     </nav>
     <div class="container">
+        {% with mensajes = get_flashed_messages(with_categories=true) %}
+        {% if mensajes %}
+        {% for cat, msg in mensajes %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
         <h2 style="color:#3b82f6;margin-bottom:1.5rem;">Contratos de Mantenimiento</h2>
         <div class="card">
             <h2>➕ Crear Contrato</h2>
@@ -86,25 +104,25 @@
             </div>
             <div style="overflow-x:auto;">
                 <table>
-                    <thead><tr><th>N° Contrato</th><th>Administrador</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Rep.</th><th>Saldo Rep.</th><th>Lub.</th><th>Saldo Lub.</th><th>M.O.</th><th>Saldo M.O.</th><th>Total</th><th>Saldo Total</th><th>Estado</th><th>Alertas</th><th>Acciones</th></tr></thead>
+                    <thead><tr><th>N° Contrato</th><th class="col-extra">Administrador</th><th class="col-extra">Inicio</th><th>Fin</th><th class="col-extra">Días</th><th class="col-extra">Rep.</th><th class="col-extra">Saldo Rep.</th><th class="col-extra">Lub.</th><th class="col-extra">Saldo Lub.</th><th class="col-extra">M.O.</th><th class="col-extra">Saldo M.O.</th><th class="col-extra">Total</th><th>Saldo Total</th><th>Estado</th><th class="col-extra">Alertas</th><th>Acciones</th></tr></thead>
                     <tbody>
                         {% for c in contratos %}
                         <tr>
                             <td><strong>{{ c.numero_contrato }}</strong></td>
-                            <td>{{ c.administrador }}</td>
-                            <td>{{ c.fecha_inicio }}</td>
+                            <td class="col-extra">{{ c.administrador }}</td>
+                            <td class="col-extra">{{ c.fecha_inicio }}</td>
                             <td>{{ c.fecha_fin }}</td>
-                            <td>{{ c.dias_vigencia }}</td>
-                            <td>${{ "%.2f"|format(c.monto_rep) }}</td>
-                            <td>${{ "%.2f"|format(c.saldo_rep) }}</td>
-                            <td>${{ "%.2f"|format(c.monto_lub) }}</td>
-                            <td>${{ "%.2f"|format(c.saldo_lub) }}</td>
-                            <td>${{ "%.2f"|format(c.monto_mo) }}</td>
-                            <td>${{ "%.2f"|format(c.saldo_mo) }}</td>
-                            <td>${{ "%.2f"|format(c.total_contrato) }}</td>
+                            <td class="col-extra">{{ c.dias_vigencia }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.monto_rep) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.saldo_rep) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.monto_lub) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.saldo_lub) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.monto_mo) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.saldo_mo) }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(c.total_contrato) }}</td>
                             <td><strong>${{ "%.2f"|format(c.saldo_total) }}</strong></td>
                             <td>{% if c.estado == "ACTIVO" %}<span class="badge badge-activo">ACTIVO</span>{% else %}<span class="badge badge-finalizado">FINALIZADO</span>{% endif %}</td>
-                            <td>
+                            <td class="col-extra">
                                 {% if c.alerta_vencer %}<span class="badge badge-aviso">VENCE EN {{ c.dias_restantes }} DÍAS</span> {% endif %}
                                 {% if c.alerta_rep %}<span class="badge badge-alerta">REP &lt; $1000</span> {% endif %}
                                 {% if c.alerta_lub %}<span class="badge badge-alerta">LUB &lt; $1000</span> {% endif %}
@@ -113,13 +131,14 @@
                             <td>
                                 {% if session.rol == "admin" %}
                                 {% if c.estado == "ACTIVO" %}
+                                <button type="button" class="btn btn-primary btn-sm" onclick='abrirEditarContrato({{ c|tojson_filter }})'>Editar</button>
                                 <form method="POST" action="/contratos/finalizar/{{ c.id }}" onsubmit="return confirm('¿Finalizar contrato {{ c.numero_contrato }}?');" style="display:inline;">
                                     <input type="hidden" name="motivo" value="Finalizado manualmente">
-                                    <button type="submit" class="btn btn-warning" style="padding:0.4rem 0.6rem;">Finalizar</button>
+                                    <button type="submit" class="btn btn-warning btn-sm">Finalizar</button>
                                 </form>
                                 {% endif %}
                                 <form method="POST" action="/contratos/eliminar/{{ c.id }}" onsubmit="return confirm('¿ELIMINAR el contrato {{ c.numero_contrato }}? Esta acción no se puede deshacer.');" style="display:inline;">
-                                    <button type="submit" class="btn btn-danger" style="padding:0.4rem 0.6rem;">Eliminar</button>
+                                    <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
                                 </form>
                                 {% endif %}
                             </td>
@@ -134,18 +153,18 @@
             {% if historial %}
             <div style="overflow-x:auto;">
                 <table>
-                    <thead><tr><th>N° Contrato</th><th>Administrador</th><th>Inicio</th><th>Fin original</th><th>Finalizado</th><th>Por</th><th>Motivo</th><th>Total</th><th>Saldo final</th><th>Detalle</th></tr></thead>
+                    <thead><tr><th>N° Contrato</th><th class="col-extra">Administrador</th><th class="col-extra">Inicio</th><th>Fin original</th><th class="col-extra">Finalizado</th><th class="col-extra">Por</th><th class="col-extra">Motivo</th><th class="col-extra">Total</th><th>Saldo final</th><th>Detalle</th></tr></thead>
                     <tbody>
                         {% for h in historial %}
                         <tr>
                             <td><strong>{{ h.numero_contrato }}</strong></td>
-                            <td>{{ h.administrador }}</td>
-                            <td>{{ h.fecha_inicio }}</td>
+                            <td class="col-extra">{{ h.administrador }}</td>
+                            <td class="col-extra">{{ h.fecha_inicio }}</td>
                             <td>{{ h.fecha_fin_original }}</td>
-                            <td>{{ h.fecha_finalizacion }}</td>
-                            <td>{{ h.finalizado_por }}</td>
-                            <td>{{ h.motivo_finalizacion }}</td>
-                            <td>${{ "%.2f"|format(h.total_contrato or 0) }}</td>
+                            <td class="col-extra">{{ h.fecha_finalizacion }}</td>
+                            <td class="col-extra">{{ h.finalizado_por }}</td>
+                            <td class="col-extra">{{ h.motivo_finalizacion }}</td>
+                            <td class="col-extra">${{ "%.2f"|format(h.total_contrato or 0) }}</td>
                             <td><strong>${{ "%.2f"|format(h.saldo_total or 0) }}</strong></td>
                             <td>
                                 <details>
@@ -188,6 +207,30 @@
             {% endif %}
         </div>
     </div>
+    <div class="modal-overlay" id="modal-editar-contrato">
+        <div class="modal">
+            <h2>Editar Contrato</h2>
+            <form id="form-editar-contrato" method="POST" oninput="calcularTotalEditContrato()">
+                <div class="form-grid">
+                    <div class="form-group"><label>N° de Contrato *</label><input type="text" name="numero_contrato" id="ec-numero" required></div>
+                    <div class="form-group"><label>Administrador del Contrato *</label><input type="text" name="administrador" id="ec-administrador" required></div>
+                    <div class="form-group"><label>Fecha de Inicio</label><input type="date" name="fecha_inicio" id="ec-inicio"></div>
+                    <div class="form-group"><label>Días de Vigencia *</label><input type="number" name="dias_vigencia" id="ec-dias" min="1" required></div>
+                </div>
+                <div class="form-grid" style="margin-top:1rem;">
+                    <div class="form-group"><label>Monto Repuestos ($)</label><input type="number" step="0.01" name="monto_rep" id="ec-rep" value="0"></div>
+                    <div class="form-group"><label>Monto Lubricantes ($)</label><input type="number" step="0.01" name="monto_lub" id="ec-lub" value="0"></div>
+                    <div class="form-group"><label>Monto Mano de Obra ($)</label><input type="number" step="0.01" name="monto_mo" id="ec-mo" value="0"></div>
+                </div>
+                <div style="margin-top:1rem;display:flex;justify-content:flex-end;"><div class="total-box">TOTAL CONTRATO: $ <span id="ec-total">0.00</span></div></div>
+                <p style="margin-top:.8rem;color:#94a3b8;font-size:.8rem;">Los saldos se recalculan manteniendo lo que ya se consumió en el contrato.</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="document.getElementById('modal-editar-contrato').classList.remove('active')">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <footer>
         <div>Creado por Poli. Loor Cevallos Willian Albiery</div>
         <div style="margin-top:0.5rem;">Coordinador Mecanico</div>
@@ -200,6 +243,27 @@
             document.getElementById("total_contrato").textContent=(rep+lub+mo).toFixed(2);
         }
         calcularTotalContrato();
+        function calcularTotalEditContrato(){
+            var rep=parseFloat(document.getElementById("ec-rep").value)||0;
+            var lub=parseFloat(document.getElementById("ec-lub").value)||0;
+            var mo=parseFloat(document.getElementById("ec-mo").value)||0;
+            document.getElementById("ec-total").textContent=(rep+lub+mo).toFixed(2);
+        }
+        function abrirEditarContrato(c){
+            document.getElementById("form-editar-contrato").action = "/contratos/editar/" + c.id;
+            document.getElementById("ec-numero").value = c.numero_contrato || "";
+            document.getElementById("ec-administrador").value = c.administrador || "";
+            document.getElementById("ec-inicio").value = c.fecha_inicio || "";
+            document.getElementById("ec-dias").value = c.dias_vigencia || 1;
+            document.getElementById("ec-rep").value = c.monto_rep || 0;
+            document.getElementById("ec-lub").value = c.monto_lub || 0;
+            document.getElementById("ec-mo").value = c.monto_mo || 0;
+            calcularTotalEditContrato();
+            document.getElementById("modal-editar-contrato").classList.add("active");
+        }
+        document.querySelectorAll(".modal-overlay").forEach(m => {
+            m.addEventListener("click", e => { if(e.target === m) m.classList.remove("active"); });
+        });
     </script>
 </body>
 </html>

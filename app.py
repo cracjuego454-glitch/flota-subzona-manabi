@@ -1771,8 +1771,75 @@ def contratos_crear():
               monto_rep, monto_lub, monto_mo, total_contrato,
               monto_rep, monto_lub, monto_mo, total_contrato))
         conn.commit()
-    except Exception as e:
+        flash(f"Contrato {numero_contrato} creado correctamente.", "success")
+    except psycopg2.IntegrityError:
         conn.rollback()
+        flash(f"No se pudo crear: el numero de contrato '{numero_contrato}' ya existe.", "error")
+    except Exception:
+        conn.rollback()
+        flash("No se pudo crear el contrato. Revisa los datos e intentalo de nuevo.", "error")
+    cur.close()
+    conn.close()
+    return redirect(url_for('contratos'))
+
+
+@app.route("/contratos/editar/<int:cid>", methods=["POST"])
+@login_required
+def contratos_editar(cid):
+    if session.get('rol') != 'admin':
+        return redirect(url_for('contratos'))
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("SELECT * FROM contratos WHERE id=%s", (cid,))
+        c = cur.fetchone()
+        if not c:
+            flash("El contrato no existe.", "error")
+        elif c.get('estado') != 'ACTIVO':
+            flash("Solo se pueden editar contratos activos.", "error")
+        else:
+            numero_contrato = (request.form.get('numero_contrato') or '').strip()
+            administrador = (request.form.get('administrador') or '').strip()
+            fecha_inicio = request.form.get('fecha_inicio') or str(c.get('fecha_inicio') or fecha_local_date())
+            try:
+                dias_vigencia = int(request.form.get('dias_vigencia') or 0)
+            except Exception:
+                dias_vigencia = 0
+            monto_rep = float(request.form.get('monto_rep') or 0)
+            monto_lub = float(request.form.get('monto_lub') or 0)
+            monto_mo = float(request.form.get('monto_mo') or 0)
+            total_contrato = monto_rep + monto_lub + monto_mo
+            if not numero_contrato or not administrador or dias_vigencia <= 0:
+                flash("Numero de contrato, administrador y dias de vigencia son obligatorios.", "error")
+            else:
+                fi = datetime.strptime(str(fecha_inicio)[:10], '%Y-%m-%d').date()
+                fecha_fin = (fi + timedelta(days=dias_vigencia)).strftime('%Y-%m-%d')
+                # Lo ya consumido se mantiene; el saldo se recalcula con los montos nuevos.
+                consumido_rep = max(0.0, float(c.get('monto_rep') or 0) - float(c.get('saldo_rep') or 0))
+                consumido_lub = max(0.0, float(c.get('monto_lub') or 0) - float(c.get('saldo_lub') or 0))
+                consumido_mo = max(0.0, float(c.get('monto_mo') or 0) - float(c.get('saldo_mo') or 0))
+                saldo_rep = max(0.0, monto_rep - consumido_rep)
+                saldo_lub = max(0.0, monto_lub - consumido_lub)
+                saldo_mo = max(0.0, monto_mo - consumido_mo)
+                cur.execute("""
+                    UPDATE contratos
+                    SET numero_contrato=%s, administrador=%s, fecha_inicio=%s, dias_vigencia=%s, fecha_fin=%s,
+                        monto_rep=%s, monto_lub=%s, monto_mo=%s, total_contrato=%s,
+                        saldo_rep=%s, saldo_lub=%s, saldo_mo=%s, saldo_total=%s
+                    WHERE id=%s
+                """, (numero_contrato, administrador, fecha_inicio, dias_vigencia, fecha_fin,
+                      monto_rep, monto_lub, monto_mo, total_contrato,
+                      saldo_rep, saldo_lub, saldo_mo, saldo_rep + saldo_lub + saldo_mo, cid))
+                conn.commit()
+                flash(f"Contrato {numero_contrato} actualizado correctamente.", "success")
+                if monto_rep < consumido_rep or monto_lub < consumido_lub or monto_mo < consumido_mo:
+                    flash("Aviso: el monto nuevo es menor a lo ya consumido en una o mas partidas; ese saldo queda en $0.", "warning")
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        flash("No se pudo guardar: el numero de contrato ya existe.", "error")
+    except Exception:
+        conn.rollback()
+        flash("No se pudo actualizar el contrato. Revisa los datos e intentalo de nuevo.", "error")
     cur.close()
     conn.close()
     return redirect(url_for('contratos'))
